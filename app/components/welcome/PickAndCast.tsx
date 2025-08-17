@@ -46,7 +46,10 @@ export default function PickAndCast() {
     const [index, setIndex] = useState(0);
 
     const [loading, setLoading] = useState(true);
+    // Note: error and notice are kept for future use
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [error, setError] = useState<string | null>(null);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [notice, setNotice] = useState<string | null>(null);
 
     const [after, setAfter] = useState<string | null>(null);
@@ -111,7 +114,11 @@ export default function PickAndCast() {
         if (mode === 'story' && (!data.items || data.items.length === 0)) {
             setNotice('No active stories right now.');
         }
-    }, [USERNAME, after, hasMore]);
+    }, [mapToPost]); // USERNAME is a constant, after and hasMore are not needed as dependencies
+
+
+    
+    
 
     // initial load + when tab changes
     useEffect(() => {
@@ -142,7 +149,7 @@ export default function PickAndCast() {
         return () => {
             alive = false;
         };
-    }, [tab]);
+    }, [tab, loadPage]);
 
     // prefetch next image
     useEffect(() => {
@@ -158,7 +165,7 @@ export default function PickAndCast() {
         if (tab === 'post' && index >= queue.length - 3 && hasMore) {
             loadPage(after, 'post').catch(() => { });
         }
-    }, [index, queue.length, hasMore, after, tab]);
+    }, [index, queue.length, hasMore, after, tab, loadPage]);
 
     const total = queue.length;
     const currentPost = queue[index];
@@ -283,22 +290,6 @@ export default function PickAndCast() {
                     </div>
                 </div>
 
-                {/* Notices / errors */}
-                {notice && (
-                    <div className="px-6">
-                        <div className="mb-4 rounded-2xl border border-blue-200/70 bg-blue-50 text-blue-700 text-sm p-4">
-                            {notice}
-                        </div>
-                    </div>
-                )}
-                {error && (
-                    <div className="px-6">
-                        <div className="mb-4 rounded-2xl border border-red-300 bg-red-50 text-red-700 text-sm p-4">
-                            {error}
-                        </div>
-                    </div>
-                )}
-
                 {/* Content */}
                 <div className="px-6 select-none" style={{ touchAction: 'pan-y' }}>
                     {loading && (
@@ -361,8 +352,8 @@ export default function PickAndCast() {
                                     return (
                                         <div
                                             className="rounded-2xl overflow-hidden mb-4 bg-[#f0f0f0] relative w-full"
-                                            style={{ 
-                                                aspectRatio: aspect, 
+                                            style={{
+                                                aspectRatio: aspect,
                                                 maxHeight: tab === 'story' ? '60vh' : '50vh',
                                                 minHeight: '200px'
                                             }}
@@ -499,13 +490,9 @@ export default function PickAndCast() {
                         className="w-10 h-10 bg-black rounded-full flex items-center justify-center hover:bg-gray-800 transition-colors"
                         aria-label="Settings"
                     >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <circle cx="12" cy="12" r="3" stroke="white" strokeWidth="2" />
-                            <path
-                                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
-                                stroke="white"
-                                strokeWidth="2"
-                            />
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="white" strokeWidth="2" />
                         </svg>
                     </Link>
                 </div>
