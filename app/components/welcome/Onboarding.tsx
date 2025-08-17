@@ -15,12 +15,12 @@ export default function Onboarding() {
     // Store connection info (in a real app, you'd send this to your backend)
     // For now, we're not using privateKey but it's required for the connection flow
     console.log('Connecting with username:', username, 'privateKey length:', privateKey.length);
-    
+
     setConnectionStatus({
       isConnected: true,
       username: username,
     });
-    
+
     // Close modal and navigate to pick and cast page
     setIsModalOpen(false);
     router.push("/pickandcast");
@@ -28,12 +28,6 @@ export default function Onboarding() {
   return (
     <div className="min-h-screen bg-[#e8e9eb] flex justify-center items-center p-4">
       <div className="w-full max-w-sm mx-auto">
-        {/* Header */}
-        <div className="text-center mb-6">
-          <h1 className="text-[#A0A0A0] font-outfit text-lg font-normal">
-            Connect
-          </h1>
-        </div>
 
         {/* Main Card */}
         <div className="bg-white rounded-[32px] p-6 shadow-lg">
@@ -82,6 +76,14 @@ export default function Onboarding() {
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 {/* Small Instagram glyph */}
+                <div className="w-6 h-6 bg-black rounded-md flex items-center justify-center">
+                  <img src="/zorb.svg" alt="Zora" className="w-4 h-4" />
+                </div>
+
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Small Zora icon */}
                 <div className="w-8 h-8 bg-[#7C65C1] rounded-lg flex items-center justify-center">
                   <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                     <path
@@ -90,37 +92,23 @@ export default function Onboarding() {
                     />
                   </svg>
                 </div>
-                <span className="text-[#666] font-outfit text-sm">
-                  @{connectionStatus.username || 'vitalik.eth'}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* Small Zora icon */}
-                <div className="w-6 h-6 bg-black rounded-md flex items-center justify-center">
-                  <img src="/zorb.svg" alt="Zora" className="w-4 h-4" />
-                </div>
-                <span className={`font-outfit text-sm ${connectionStatus.isConnected ? 'text-green-600' : 'text-[#999]'}`}>
-                  {connectionStatus.isConnected ? 'Connected' : 'Not connected'}
-                </span>
               </div>
             </div>
 
             {/* Connect Button */}
             <button
               onClick={() => connectionStatus.isConnected ? router.push("/pickandcast") : setIsModalOpen(true)}
-              className={`w-full text-white font-outfit text-lg font-medium py-4 rounded-2xl mb-4 transition-all duration-200 ${
-                connectionStatus.isConnected 
-                  ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-lg' 
+              className={`w-full text-white font-outfit text-lg font-medium py-4 rounded-2xl mb-4 transition-all duration-200 ${connectionStatus.isConnected
+                  ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-lg'
                   : 'bg-black hover:bg-gray-800'
-              }`}
+                }`}
             >
               {connectionStatus.isConnected ? 'Go to Pick & Cast' : 'Connect'}
             </button>
 
             {/* Description */}
             <p className="text-[#666] font-outfit text-sm text-center leading-relaxed">
-              {connectionStatus.isConnected 
+              {connectionStatus.isConnected
                 ? `Connected as @${connectionStatus.username}. Ready to cast your posts to Zora!`
                 : "To get started, connect your Insta account to Zora. We'll fetch your posts automatically once it's linked."
               }

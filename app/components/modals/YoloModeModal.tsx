@@ -25,7 +25,7 @@ export default function YoloModeModal() {
           </h1>
           <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1L13.5 2.5L16.17 5.17C15.24 5.06 14.32 5 13.38 5C10.1 5 7.1 5.81 4.77 7.28C2.68 8.61 2 10.88 2 12C2 13.12 2.68 15.39 4.77 16.72C7.1 18.19 10.1 19 13.38 19C14.32 19 15.24 18.94 16.17 18.83L13.5 21.5L15 23L21 17V15H19V9H21ZM17.33 17.97C16.5 18.16 15.56 18.2 14.59 18.2C11.34 18.2 8.67 17.45 6.81 16.36C5.21 15.42 4.8 14.58 4.8 14C4.8 13.42 5.21 12.58 6.81 11.64C8.67 10.55 11.34 9.8 14.59 9.8C15.56 9.8 16.5 9.84 17.33 10.03V17.97Z" fill="white"/>
+              <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1L13.5 2.5L16.17 5.17C15.24 5.06 14.32 5 13.38 5C10.1 5 7.1 5.81 4.77 7.28C2.68 8.61 2 10.88 2 12C2 13.12 2.68 15.39 4.77 16.72C7.1 18.19 10.1 19 13.38 19C14.32 19 15.24 18.94 16.17 18.83L13.5 21.5L15 23L21 17V15H19V9H21ZM17.33 17.97C16.5 18.16 15.56 18.2 14.59 18.2C11.34 18.2 8.67 17.45 6.81 16.36C5.21 15.42 4.8 14.58 4.8 14C4.8 13.42 5.21 12.58 6.81 11.64C8.67 10.55 11.34 9.8 14.59 9.8C15.56 9.8 16.5 9.84 17.33 10.03V17.97Z" fill="white" />
             </svg>
           </div>
         </div>
@@ -40,8 +40,8 @@ export default function YoloModeModal() {
               </h2>
               <button className="flex items-center gap-1 text-[#666] hover:text-black transition-colors">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 <span className="font-outfit text-sm">Edit</span>
               </button>
@@ -52,15 +52,17 @@ export default function YoloModeModal() {
               Automatically cast all new tweets without approval. You&apos;ll be charged 0.1 USDC per cast.
             </p>
 
+            <img src="/Icon/curvyLineIcon.svg" alt="Edit" className="mb-6" />
+
+
             {/* Enable YOLO Mode Button */}
-            <button 
+            <button
               onClick={handleEnableYolo}
               disabled={yoloModeEnabled}
-              className={`w-full py-4 rounded-2xl font-outfit text-base font-medium mb-4 transition-colors ${
-                yoloModeEnabled 
-                  ? 'bg-gray-400 text-white cursor-not-allowed' 
+              className={`w-full py-4 rounded-2xl font-outfit text-base font-medium mb-4 transition-colors ${yoloModeEnabled
+                  ? 'bg-gray-400 text-white cursor-not-allowed'
                   : 'bg-black text-white hover:bg-gray-800'
-              }`}
+                }`}
             >
               {yoloModeEnabled ? 'YOLO mode enabled' : 'Enable YOLO mode'}
             </button>
@@ -69,13 +71,11 @@ export default function YoloModeModal() {
 
         {/* Bottom Navigation */}
         <div className="flex items-center justify-around py-6 border-t border-[#F0F0F0]">
-          <Link 
+          <Link
             href="/pickandcast"
-            className="w-10 h-10 bg-black rounded-full flex items-center justify-center hover:bg-gray-800 transition-colors"
+            className="rounded-full flex items-center justify-center transition-colors"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 5v14m-7-7h14" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+            <img src="/Icon/rightArrowIcon.svg" alt="Edit" className="w-12 h-12 rotate-180" />
           </Link>
         </div>
       </div>

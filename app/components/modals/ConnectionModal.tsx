@@ -100,7 +100,7 @@ export default function ConnectionModal({ isOpen, onClose, onConnect }: Connecti
                         if (errors.username) setErrors(prev => ({ ...prev, username: undefined }));
                       }}
                       placeholder="Enter your username"
-                      className={`w-full px-4 py-3 rounded-xl border-2 font-outfit text-base transition-all duration-200 focus:outline-none ${
+                      className={`text-black w-full px-4 py-3 rounded-xl border-2 font-outfit text-base transition-all duration-200 focus:outline-none ${
                         errors.username
                           ? 'border-red-300 focus:border-red-500 bg-red-50'
                           : 'border-gray-200 focus:border-[#7C65C1] bg-gray-50 focus:bg-white'
@@ -130,7 +130,7 @@ export default function ConnectionModal({ isOpen, onClose, onConnect }: Connecti
                         if (errors.privateKey) setErrors(prev => ({ ...prev, privateKey: undefined }));
                       }}
                       placeholder="Enter your private key"
-                      className={`w-full px-4 py-3 pr-12 rounded-xl border-2 font-outfit text-base transition-all duration-200 focus:outline-none ${
+                      className={`text-black w-full px-4 py-3 pr-12 rounded-xl border-2 font-outfit text-base transition-all duration-200 focus:outline-none ${
                         errors.privateKey
                           ? 'border-red-300 focus:border-red-500 bg-red-50'
                           : 'border-gray-200 focus:border-[#7C65C1] bg-gray-50 focus:bg-white'

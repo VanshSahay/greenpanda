@@ -79,10 +79,9 @@ export default function PickAndCast() {
         mediaUrl: m.mediaUrl ?? null,
     });
 
-    // Endpoint switcher
-    const loadPage = useCallback(async (cursor: string | null, mode: 'post' | 'story' = 'post') => {
+    const loadPage = async (cursor: string | null, mode: 'post' | 'story' = 'post') => {
         const endpoint = mode === 'story' ? '/api/stories' : '/api/posts';
-        const payload: { username_or_url: string; after?: string } = { username_or_url: USERNAME };
+        const payload: any = { username_or_url: USERNAME };
         if (mode === 'post' && cursor) payload.after = cursor; // posts paginate; stories don't
 
         const res = await fetch(endpoint, {
@@ -114,11 +113,7 @@ export default function PickAndCast() {
         if (mode === 'story' && (!data.items || data.items.length === 0)) {
             setNotice('No active stories right now.');
         }
-    }, [mapToPost]); // USERNAME is a constant, after and hasMore are not needed as dependencies
-
-
-    
-    
+    };
 
     // initial load + when tab changes
     useEffect(() => {
@@ -149,7 +144,7 @@ export default function PickAndCast() {
         return () => {
             alive = false;
         };
-    }, [tab, loadPage]);
+    }, [tab]);
 
     // prefetch next image
     useEffect(() => {
@@ -297,7 +292,7 @@ export default function PickAndCast() {
                             {tab === 'story' ? 'Loading stories…' : 'Loading posts + reels…'}
                         </div>
                     )}
-
+                    
                     <AnimatePresence mode="wait" initial={false} presenceAffectsLayout={false}>
                         {currentPost && (
                             <motion.div
@@ -312,7 +307,7 @@ export default function PickAndCast() {
                                 drag="x"
                                 dragElastic={0.18}
                                 dragMomentum={false}
-                                style={{ x, rotate, willChange: 'transform' }}
+                                style={{ x, rotate }}
                                 onDragEnd={onDragEnd}
                                 whileTap={{ scale: 0.995 }}
                                 className="relative bg-[#F8F8F8] rounded-3xl p-4 mb-6"
@@ -383,10 +378,8 @@ export default function PickAndCast() {
                                     );
                                 })()}
 
-
-                                {/* Caption (none from this API) */}
                                 {currentPost.content && (
-                                    <div className="text-[#333] font-outfit text-sm leading-relaxed mb-2">
+                                    <div className="text-black font-outfit text-sm leading-relaxed mb-2">
                                         {currentPost.content}
                                     </div>
                                 )}
@@ -413,16 +406,8 @@ export default function PickAndCast() {
                         onClick={() => (currentPost ? handleIgnore() : undefined)}
                         className="flex flex-col items-center gap-2 p-2 hover:bg-gray-50 rounded-lg transition-colors"
                     >
-                        <div className="w-8 h-8 flex items-center justify-center">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                <path
-                                    d="M18 6L6 18M6 6l12 12"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                />
-                            </svg>
+                        <div className="flex items-center justify-center">
+                            <img src="/Icon/ignoreIcon.svg" alt="Ignore" className="w-12 h-12" />
                         </div>
                         <span className="text-[#666] font-outfit text-xs">Ignore</span>
                     </button>
@@ -431,23 +416,8 @@ export default function PickAndCast() {
                         onClick={handleEdit}
                         className="flex flex-col items-center gap-2 p-2 hover:bg-gray-50 rounded-lg transition-colors"
                     >
-                        <div className="w-8 h-8 flex items-center justify-center">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                <path
-                                    d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                />
-                                <path
-                                    d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                />
-                            </svg>
+                        <div className="flex items-center justify-center">
+                            <img src="/Icon/editIcon.svg" alt="Edit" className="w-12 h-12" />
                         </div>
                         <span className="text-[#666] font-outfit text-xs">Edit</span>
                     </button>
@@ -456,16 +426,8 @@ export default function PickAndCast() {
                         onClick={() => (currentPost ? handleCast() : undefined)}
                         className="flex flex-col items-center gap-2 p-2 hover:bg-gray-50 rounded-lg transition-colors"
                     >
-                        <div className="w-8 h-8 flex items-center justify-center">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                <path
-                                    d="M5 12h14m-7-7l7 7-7 7"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                />
-                            </svg>
+                        <div className="flex items-center justify-center">
+                            <img src="/Icon/rightArrowIcon.svg" alt="Edit" className="w-12 h-12" />
                         </div>
                         <span className="text-[#666] font-outfit text-xs">{primaryActionLabel}</span>
                     </button>
@@ -476,15 +438,7 @@ export default function PickAndCast() {
                 </div>
 
                 {/* Bottom nav */}
-                <div className="flex items-center justify-around py-4 border-t border-[#F0F0F0]">
-                    <button
-                        className="w-10 h-10 bg-black rounded-full flex items-center justify-center hover:bg-gray-800 transition-colors"
-                        aria-label="Add"
-                    >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                            <path d="M12 5v14m-7-7h14" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </button>
+                <div className="flex items-center justify-center py-4 border-t border-[#F0F0F0]">
                     <Link
                         href="/settings"
                         className="w-10 h-10 bg-black rounded-full flex items-center justify-center hover:bg-gray-800 transition-colors"
