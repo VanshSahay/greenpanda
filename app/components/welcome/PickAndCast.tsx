@@ -22,13 +22,13 @@ interface Post {
     id: string | number;
     author: { name: string; username: string; avatar: string };
     image: string | null;
-    content: string;            // <- caption in UI
+    content: string;
     hashtags: string[];
     likes: number;
     comments: number;
-    code?: string;              // reels-only; used to resolve MP4
-    takenAt?: number | null;    // for ordering
-    mediaUrl?: string | null;   // stories can include direct media URL
+    code?: string;
+    takenAt?: number | null;
+    mediaUrl?: string | null;
 }
 
 type ApiItem = {
@@ -36,7 +36,7 @@ type ApiItem = {
     code?: string | null;
     thumbnail: string | null;
     mediaUrl?: string | null;
-    caption?: string | null;    // <-- coming from /api/posts
+    caption?: string | null;
     stats?: { likeCount?: number | null; commentCount?: number | null; playCount?: number | null };
     takenAt?: number | null;
 };
@@ -75,7 +75,6 @@ export default function PickAndCast() {
 
     const [after, setAfter] = useState<string | null>(null);
     const [hasMore, setHasMore] = useState(false);
-
     const [tab, setTab] = useState<'post' | 'story'>('post');
 
     // Profile state
@@ -91,7 +90,12 @@ export default function PickAndCast() {
     const [coinResult, setCoinResult] = useState<{hash: `0x${string}`; address: `0x${string}` | undefined} | null>(null);
 
     // Motion values
+    const UP_TRIGGER = 120;                 // px to trigger editor
+    const [upProgress, setUpProgress] = useState(0);
+
+    // Motion values (now support vertical too)
     const x = useMotionValue(0);
+    const y = useMotionValue(0);
     const rotate = useTransform(x, [-300, 0, 300], [-12, 0, 12]);
     const opacity = useTransform(x, [-150, 0, 150], [0.7, 1, 0.7]);
     const scale = useTransform(x, [-150, 0, 150], [0.95, 1, 0.95]);
@@ -426,43 +430,38 @@ export default function PickAndCast() {
     };
 
     useEffect(() => {
-        x.set(0); // reset swipe offset when index changes
-    }, [index, x]);
+        x.set(0);
+        y.set(0);
+    }, [index, x, y]);
 
-    // Load profile on component mount
+    // Profile loader
     useEffect(() => {
-        loadProfile();
+        (async () => {
+            try {
+                setProfileLoading(true);
+                const res = await fetch('/api/profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username_or_url: USERNAME }),
+                    cache: 'no-store',
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to fetch profile');
+                if (data.success && data.profilePicUrl) setProfilePicUrl(data.profilePicUrl);
+            } catch (e) {
+                console.error('Error loading profile:', e);
+            } finally {
+                setProfileLoading(false);
+            }
+        })();
     }, []);
 
-    const loadProfile = async () => {
-        try {
-            setProfileLoading(true);
-            const res = await fetch('/api/profile', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username_or_url: USERNAME }),
-                cache: 'no-store',
-            });
-
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Failed to fetch profile');
-
-            if (data.success && data.profilePicUrl) {
-                setProfilePicUrl(data.profilePicUrl);
-            }
-        } catch (e) {
-            console.error('Error loading profile:', e);
-        } finally {
-            setProfileLoading(false);
-        }
-    };
-
-    // API item -> UI Post
+    // Map API → UI
     const mapToPost = (m: ApiItem): Post => ({
         id: m.id,
         author: { name: USERNAME, username: USERNAME, avatar: profilePicUrl || DEFAULT_AVATAR },
         image: m.thumbnail ?? null,
-        content: (m.caption ?? '').trim(), // <-- prefill with API caption
+        content: (m.caption ?? '').trim(),
         hashtags: [],
         likes: (m.stats?.likeCount ?? 0) || 0,
         comments: (m.stats?.commentCount ?? 0) || 0,
@@ -471,10 +470,11 @@ export default function PickAndCast() {
         mediaUrl: m.mediaUrl ?? null,
     });
 
+    // Fetch page (posts or stories)
     const loadPage = async (cursor: string | null, mode: 'post' | 'story' = 'post') => {
         const endpoint = mode === 'story' ? '/api/stories' : '/api/posts';
         const payload: { username_or_url: string; after?: string } = { username_or_url: USERNAME };
-        if (mode === 'post' && cursor) payload.after = cursor; // posts paginate; stories don't
+        if (mode === 'post' && cursor) payload.after = cursor;
 
         const res = await fetch(endpoint, {
             method: 'POST',
@@ -490,7 +490,6 @@ export default function PickAndCast() {
             .filter((m) => m.thumbnail || m.mediaUrl)
             .map(mapToPost);
 
-        // de-dupe by id, then newest-first
         setQueue((prev) => {
             const byId = new Map<string | number, Post>();
             [...prev, ...newPosts].forEach((p) => byId.set(p.id, p));
@@ -501,13 +500,10 @@ export default function PickAndCast() {
 
         setHasMore(mode === 'post' ? Boolean(data.pageInfo?.hasNextPage) : false);
         setAfter(mode === 'post' ? data.pageInfo?.endCursor ?? null : null);
-
-        if (mode === 'story' && (!data.items || data.items.length === 0)) {
-            setNotice('No active stories right now.');
-        }
+        if (mode === 'story' && (!data.items || data.items.length === 0)) setNotice('No active stories right now.');
     };
 
-    // initial load + when tab changes
+    // Initial & on tab change
     useEffect(() => {
         let alive = true;
         (async () => {
@@ -515,7 +511,6 @@ export default function PickAndCast() {
                 setLoading(true);
                 setError(null);
                 setNotice(null);
-
                 setQueue([]);
                 setIndex(0);
                 setAfter(null);
@@ -535,15 +530,16 @@ export default function PickAndCast() {
         };
     }, [tab]);
 
+    // Lock scroll when editor is open
     useEffect(() => {
         if (isEditorOpen) document.body.style.overflow = 'hidden';
         else document.body.style.overflow = '';
-        return () => { document.body.style.overflow = ''; };
+        return () => {
+            document.body.style.overflow = '';
+        };
     }, [isEditorOpen]);
 
-
-
-    // prefetch next image
+    // Prefetch next image
     useEffect(() => {
         const next = queue[index + 1]?.image;
         if (next) {
@@ -552,12 +548,12 @@ export default function PickAndCast() {
         }
     }, [queue, index]);
 
-    // auto-load more (posts only)
+    // Auto-load more (posts only)
     useEffect(() => {
         if (tab === 'post' && index >= queue.length - 3 && hasMore) {
             loadPage(after, 'post').catch(() => { });
         }
-    }, [index, queue.length, hasMore, after, tab, loadPage]);
+    }, [index, queue.length, hasMore, after, tab]);
 
     const total = queue.length;
     const currentPost = queue[index];
@@ -605,6 +601,7 @@ export default function PickAndCast() {
         snapBack();
     };
 
+
     const handleIgnore = () => flyOutLeft();
 
     const handleCast = async () => {
@@ -617,14 +614,12 @@ export default function PickAndCast() {
         advance();
     };
 
-    // EDITOR open with current caption
     const handleEdit = () => {
         if (!currentPost) return;
         setDraftCaption(currentPost.content || '');
         setIsEditorOpen(true);
     };
 
-    // Save edited caption locally and cast
     const handleEditorCast = async () => {
         setQueue((prev) => {
             const next = [...prev];
@@ -674,12 +669,7 @@ export default function PickAndCast() {
                                 draggable={false}
                             />
                         ) : (
-                            <img
-                                src={DEFAULT_AVATAR}
-                                alt={USERNAME}
-                                className="w-10 h-10 rounded-full object-cover"
-                                draggable={false}
-                            />
+                            <img src={DEFAULT_AVATAR} alt={USERNAME} className="w-10 h-10 rounded-full object-cover" draggable={false} />
                         )}
                         <div>
                             <h1 className="text-black font-outfit text-xl font-medium">Pick and cast</h1>
@@ -687,10 +677,9 @@ export default function PickAndCast() {
                         </div>
                     </div>
                     <button
-                        onClick={loadProfile}
-                        disabled={profileLoading}
-                        className="w-8 h-8 bg-black rounded-lg flex items-center justify-center hover:bg-gray-800 transition-colors disabled:opacity-50"
-                        title="Refresh Profile Picture"
+                        onClick={() => loadPage(null, tab)}
+                        className="w-8 h-8 bg-black rounded-lg flex items-center justify-center hover:bg-gray-800 transition-colors"
+                        title="Refresh"
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                             <path
@@ -701,7 +690,7 @@ export default function PickAndCast() {
                     </button>
                 </div>
 
-                {/* Segmented control */}
+                {/* Tabs */}
                 <div className="px-6 pb-4">
                     <div className="flex items-center gap-6">
                         <button
@@ -709,8 +698,6 @@ export default function PickAndCast() {
                             onClick={() => setTab('post')}
                             className={`rounded-full px-6 py-3 font-outfit text-[18px] transition-all ${tab === 'post' ? 'bg-[#4a4653] text-white shadow-sm' : 'bg-transparent text-[#bfbfc4] hover:text-black'
                                 }`}
-                            aria-pressed={tab === 'post'}
-                            aria-label="Show Posts"
                         >
                             Post
                         </button>
@@ -720,8 +707,6 @@ export default function PickAndCast() {
                             onClick={() => setTab('story')}
                             className={`rounded-full px-6 py-3 font-outfit text-[18px] transition-all ${tab === 'story' ? 'bg-[#4a4653] text-white shadow-sm' : 'bg-transparent text-[#bfbfc4] hover:text-black'
                                 }`}
-                            aria-pressed={tab === 'story'}
-                            aria-label="Show Stories"
                         >
                             Story
                         </button>
@@ -746,10 +731,17 @@ export default function PickAndCast() {
                                 }}
                                 initial="enter"
                                 animate="center"
-                                drag="x"
+                                drag                          // allow both axes
+                                dragDirectionLock             // lock axis after a small movement
                                 dragElastic={0.18}
                                 dragMomentum={false}
-                                style={{ x, rotate, opacity, scale }}
+                                style={{ x, y, rotate }}
+                                onUpdate={(latest) => {
+                                    // latest.y is negative when dragging up
+                                    const val = typeof latest.y === 'number' ? latest.y : y.get();
+                                    const prog = Math.min(1, Math.max(0, (-val) / UP_TRIGGER));
+                                    setUpProgress(prog);
+                                }}
                                 onDragEnd={onDragEnd}
                                 whileTap={{ scale: 0.995 }}
                                 className="relative bg-[#F8F8F8] rounded-3xl p-4 mb-6"
@@ -776,6 +768,22 @@ export default function PickAndCast() {
                                 </motion.div>
 
                                 {/* Header */}
+
+                                {/* Pull-up to edit hint */}
+                                <motion.div
+                                    className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-white text-xs font-outfit shadow"
+                                    style={{
+                                        opacity: upProgress,              // fade in as you pull
+                                        scale: 0.9 + upProgress * 0.1,    // tiny pop
+                                        background: `rgba(0,0,0,${0.35 + 0.4 * upProgress})`,
+                                        pointerEvents: 'none'
+                                    }}
+                                >
+                                    {upProgress < 1 ? 'Pull up to edit' : 'Release to edit'}
+                                </motion.div>
+
+
+                                {/* Card header */}
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-3">
                                         {profileLoading ? (
@@ -788,12 +796,7 @@ export default function PickAndCast() {
                                                 draggable={false}
                                             />
                                         ) : (
-                                            <img
-                                                src={DEFAULT_AVATAR}
-                                                alt={USERNAME}
-                                                className="w-10 h-10 rounded-full object-cover"
-                                                draggable={false}
-                                            />
+                                            <img src={DEFAULT_AVATAR} alt={USERNAME} className="w-10 h-10 rounded-full object-cover" draggable={false} />
                                         )}
                                         <div>
                                             <div className="font-outfit text-sm font-medium text-black">{USERNAME}</div>
@@ -810,12 +813,8 @@ export default function PickAndCast() {
                                 {/* Media */}
                                 {(() => {
                                     const aspect = getAspect(currentPost, tab);
-                                    const imgUrl = currentPost?.image
-                                        ? `/api/proxy-media?url=${encodeURIComponent(currentPost.image)}`
-                                        : null;
-                                    const vidUrl = currentPost?.mediaUrl
-                                        ? `/api/proxy-media?url=${encodeURIComponent(currentPost.mediaUrl)}`
-                                        : null;
+                                    const imgUrl = currentPost?.image ? `/api/proxy-media?url=${encodeURIComponent(currentPost.image)}` : null;
+                                    const vidUrl = currentPost?.mediaUrl ? `/api/proxy-media?url=${encodeURIComponent(currentPost.mediaUrl)}` : null;
 
                                     return (
                                         <div
@@ -832,16 +831,9 @@ export default function PickAndCast() {
                                                     playsInline
                                                 />
                                             ) : imgUrl ? (
-                                                <img
-                                                    className="absolute inset-0 w-full h-full object-cover"
-                                                    src={imgUrl}
-                                                    alt={tab === 'story' ? 'Instagram story' : 'Instagram post'}
-                                                    draggable={false}
-                                                />
+                                                <img className="absolute inset-0 w-full h-full object-cover" src={imgUrl} alt="Instagram media" draggable={false} />
                                             ) : (
-                                                <div className="absolute inset-0 w-full h-full flex items-center justify-center text-[#666]">
-                                                    Media unavailable
-                                                </div>
+                                                <div className="absolute inset-0 w-full h-full flex items-center justify-center text-[#666]">Media unavailable</div>
                                             )}
                                         </div>
                                     );
@@ -849,9 +841,7 @@ export default function PickAndCast() {
 
                                 {/* Caption */}
                                 {!!currentPost.content && (
-                                    <div className="text-black font-outfit text-sm leading-relaxed mb-2 whitespace-pre-wrap">
-                                        {currentPost.content}
-                                    </div>
+                                    <div className="text-black font-outfit text-sm leading-relaxed mb-2 whitespace-pre-wrap">{currentPost.content}</div>
                                 )}
                             </motion.div>
                         )}
@@ -915,27 +905,22 @@ export default function PickAndCast() {
                     </button>
                 </div>
 
-                <div className="text-center py-3 text-[#666] font-outfit text-sm border-t border-[#F0F0F0]">
-                    {progressText}
-                </div>
+                <div className="text-center py-3 text-[#666] font-outfit text-sm border-t border-[#F0F0F0]">{progressText}</div>
 
                 {/* Bottom nav */}
                 <div className="flex items-center justify-center py-4 border-t border-[#F0F0F0]">
-                    <Link
-                        href="/settings"
-                        className="w-10 h-10 bg-black rounded-full flex items-center justify-center hover:bg-gray-800 transition-colors"
-                        aria-label="Settings"
-                    >
+                    <Link href="/settings" className="w-10 h-10 bg-black rounded-full flex items-center justify-center hover:bg-gray-800 transition-colors" aria-label="Settings">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <circle cx="12" cy="12" r="3" stroke="white" strokeWidth="2" />
-                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="white" strokeWidth="2" />
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="white" strokeWidth="2" />
                         </svg>
                     </Link>
                 </div>
+
+                {/* EDITOR SHEET */}
                 <AnimatePresence>
                     {isEditorOpen && (
                         <>
-                            {/* Backdrop */}
                             <motion.div
                                 className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]"
                                 initial={{ opacity: 0 }}
@@ -944,16 +929,11 @@ export default function PickAndCast() {
                                 onClick={() => setIsEditorOpen(false)}
                             />
 
-
                             <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:p-5 pointer-events-none">
                                 <motion.div
                                     role="dialog"
                                     aria-modal="true"
-                                    className="
-            pointer-events-auto w-full max-w-sm
-            bg-white rounded-[28px] shadow-2xl overflow-hidden
-          "
-                                    // Slide up, allow drag to dismiss
+                                    className="pointer-events-auto w-full max-w-sm bg-white rounded-[28px] shadow-2xl overflow-hidden"
                                     initial={{ y: '100%' }}
                                     animate={{ y: 0 }}
                                     exit={{ y: '100%' }}
@@ -964,10 +944,7 @@ export default function PickAndCast() {
                                     onDragEnd={(_, info) => {
                                         if (info.offset.y > 120 || info.velocity.y > 800) setIsEditorOpen(false);
                                     }}
-
-                                    style={{
-                                        maxHeight: 'min(86dvh, 720px)',
-                                    }}
+                                    style={{ maxHeight: 'min(86dvh, 720px)' }}
                                 >
                                     <div className="px-5 pt-4">
                                         <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-gray-300" />
@@ -984,36 +961,22 @@ export default function PickAndCast() {
                                             </button>
                                         </div>
 
-                                        <img src="/Icon/curvyLineIcon.svg" alt="Edit" className="mb-6" />
+                                        <img src="/Icon/curvyLineIcon.svg" alt="Decorative wave" className="mb-6" />
                                     </div>
 
-                                    {/* Scrollable content (stays inside rounded box) */}
-                                    <div
-                                        className="px-5 mt-3 overflow-auto"
-                                        style={{
-                                            maxHeight: 'calc(min(86dvh, 720px) - 168px)',
-                                        }}
-                                    >
+                                    <div className="px-5 mt-3 overflow-auto" style={{ maxHeight: 'calc(min(86dvh, 720px) - 168px)' }}>
                                         <textarea
-                                            className="w-full h-[240px] sm:h-[280px] rounded-2xl bg-[#F3F3F4] p-4
-                         outline-none resize-none font-outfit text-[15px] leading-6 text-[#161616]
-                         focus:ring-2 focus:ring-black/10"
+                                            className="w-full h-[240px] sm:h-[280px] rounded-2xl bg-[#F3F3F4] p-4 outline-none resize-none font-outfit text-[15px] leading-6 text-[#161616] focus:ring-2 focus:ring-black/10"
                                             value={draftCaption}
                                             onChange={(e) => setDraftCaption(e.target.value)}
                                             placeholder="Write your caption…"
                                         />
                                     </div>
 
-                                  
-                                    <div
-                                        className="px-5 mt-4"
-                                        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 14px)' }}
-                                    >
+                                    <div className="px-5 mt-4" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 14px)' }}>
                                         <button
                                             onClick={handleEditorCast}
-                                            className="w-full bg-black text-white font-outfit text-base py-4 rounded-2xl
-                         shadow-[0_8px_0_0_rgba(0,0,0,0.18)]
-                         active:translate-y-[2px] active:shadow-[0_6px_0_0_rgba(0,0,0,0.18)]"
+                                            className="w-full bg-black text-white font-outfit text-base py-4 rounded-2xl shadow-[0_8px_0_0_rgba(0,0,0,0.18)] active:translate-y-[2px] active:shadow-[0_6px_0_0_rgba(0,0,0,0.18)]"
                                         >
                                             Post
                                         </button>
@@ -1023,7 +986,6 @@ export default function PickAndCast() {
                         </>
                     )}
                 </AnimatePresence>
-
             </div>
         </div>
     );
