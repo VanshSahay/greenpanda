@@ -14,13 +14,13 @@ interface Post {
     id: string | number;
     author: { name: string; username: string; avatar: string };
     image: string | null;
-    content: string;
+    content: string;            // <- caption in UI
     hashtags: string[];
     likes: number;
     comments: number;
-    code?: string;            // reels-only; used to resolve MP4
-    takenAt?: number | null;  // for ordering
-    mediaUrl?: string | null; // stories can include direct media URL
+    code?: string;              // reels-only; used to resolve MP4
+    takenAt?: number | null;    // for ordering
+    mediaUrl?: string | null;   // stories can include direct media URL
 }
 
 type ApiItem = {
@@ -28,6 +28,7 @@ type ApiItem = {
     code?: string | null;
     thumbnail: string | null;
     mediaUrl?: string | null;
+    caption?: string | null;    // <-- coming from /api/posts
     stats?: { likeCount?: number | null; commentCount?: number | null; playCount?: number | null };
     takenAt?: number | null;
 };
@@ -38,19 +39,17 @@ type ApiResponse = {
     error?: string;
 };
 
-const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1494790108755-2616b612b47c?w=40&h=40&fit=crop&crop=face';
-const USERNAME = "icc";
+const DEFAULT_AVATAR =
+    'https://images.unsplash.com/photo-1494790108755-2616b612b47c?w=40&h=40&fit=crop&crop=face';
+const USERNAME = 'icc';
 
 export default function PickAndCast() {
     const [queue, setQueue] = useState<Post[]>([]);
     const [index, setIndex] = useState(0);
 
     const [loading, setLoading] = useState(true);
-    // Note: error and notice are kept for future use
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [error, setError] = useState<string | null>(null);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [notice, setNotice] = useState<string | null>(null);
+    const [, setError] = useState<string | null>(null);
+    const [, setNotice] = useState<string | null>(null);
 
     const [after, setAfter] = useState<string | null>(null);
     const [hasMore, setHasMore] = useState(false);
@@ -60,6 +59,10 @@ export default function PickAndCast() {
     // Profile state
     const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
     const [profileLoading, setProfileLoading] = useState(false);
+
+    // EDITOR state
+    const [isEditorOpen, setIsEditorOpen] = useState(false);
+    const [draftCaption, setDraftCaption] = useState('');
 
     // Motion values
     const x = useMotionValue(0);
@@ -74,7 +77,6 @@ export default function PickAndCast() {
         loadProfile();
     }, []);
 
-    // Load profile picture
     const loadProfile = async () => {
         try {
             setProfileLoading(true);
@@ -90,7 +92,6 @@ export default function PickAndCast() {
 
             if (data.success && data.profilePicUrl) {
                 setProfilePicUrl(data.profilePicUrl);
-                console.log('Profile picture loaded:', data.profilePicUrl);
             }
         } catch (e) {
             console.error('Error loading profile:', e);
@@ -101,14 +102,10 @@ export default function PickAndCast() {
 
     // API item -> UI Post
     const mapToPost = (m: ApiItem): Post => ({
-        id: m.id, // backend already stabilizes id
-        author: { 
-            name: USERNAME, 
-            username: USERNAME, 
-            avatar: profilePicUrl || DEFAULT_AVATAR 
-        },
+        id: m.id,
+        author: { name: USERNAME, username: USERNAME, avatar: profilePicUrl || DEFAULT_AVATAR },
         image: m.thumbnail ?? null,
-        content: '',
+        content: (m.caption ?? '').trim(), // <-- prefill with API caption
         hashtags: [],
         likes: (m.stats?.likeCount ?? 0) || 0,
         comments: (m.stats?.commentCount ?? 0) || 0,
@@ -133,7 +130,7 @@ export default function PickAndCast() {
         if (!res.ok) throw new Error(data.error || `Failed to fetch ${mode}`);
 
         const newPosts = (data.items || [])
-            .filter((m) => m.thumbnail || m.mediaUrl)   // <— allow video-only stories
+            .filter((m) => m.thumbnail || m.mediaUrl)
             .map(mapToPost);
 
         // de-dupe by id, then newest-first
@@ -162,7 +159,6 @@ export default function PickAndCast() {
                 setError(null);
                 setNotice(null);
 
-                // reset list and pagination on tab change
                 setQueue([]);
                 setIndex(0);
                 setAfter(null);
@@ -170,9 +166,7 @@ export default function PickAndCast() {
 
                 await loadPage(null, tab);
                 if (!alive) return;
-                setNotice(
-                    tab === 'story' ? `Loaded stories for @${USERNAME}.` : `Loaded posts + reels for @${USERNAME}.`
-                );
+                setNotice(tab === 'story' ? `Loaded stories for @${USERNAME}.` : `Loaded posts + reels for @${USERNAME}.`);
             } catch (e: unknown) {
                 if (alive) setError(e instanceof Error ? e.message : `Unable to load ${tab}`);
             } finally {
@@ -183,6 +177,14 @@ export default function PickAndCast() {
             alive = false;
         };
     }, [tab]);
+
+    useEffect(() => {
+        if (isEditorOpen) document.body.style.overflow = 'hidden';
+        else document.body.style.overflow = '';
+        return () => { document.body.style.overflow = ''; };
+    }, [isEditorOpen]);
+
+
 
     // prefetch next image
     useEffect(() => {
@@ -210,7 +212,7 @@ export default function PickAndCast() {
     const flyOutLeft = async () => {
         const width = typeof window !== 'undefined' ? window.innerWidth : 500;
         await animate(x, -width * 1.1, { duration: 0.22 });
-        advance(); // index++ mounts the next card; x resets in the effect
+        advance();
     };
 
     const onDragEnd = (_: PointerEvent, info: PanInfo) => {
@@ -218,7 +220,7 @@ export default function PickAndCast() {
         const fastLeft = info.velocity.x < -600;
         if (farLeft || fastLeft) {
             flyOutLeft();
-            return; // prevent any fallthrough
+            return;
         }
         snapBack();
     };
@@ -228,21 +230,17 @@ export default function PickAndCast() {
     const handleCast = async () => {
         if (!currentPost) return;
         if (tab === 'story') {
-            // Example: you could use currentPost.mediaUrl (image or video) if you exposed it
             console.log('Story mediaUrl:', currentPost.mediaUrl);
             advance();
             return;
         }
-        // posts/reels; only reels have code
         const code = currentPost.code;
         if (!code) {
             advance();
             return;
         }
         try {
-            const res = await fetch(`/api/reel-download?code=${encodeURIComponent(code)}`, {
-                cache: 'no-store',
-            });
+            const res = await fetch(`/api/reel-download?code=${encodeURIComponent(code)}`, { cache: 'no-store' });
             const data = await res.json();
             if (data?.videoUrl) {
                 console.log('MP4:', data.videoUrl);
@@ -256,7 +254,23 @@ export default function PickAndCast() {
         }
     };
 
-    const handleEdit = () => currentPost && console.log('Edit post:', currentPost.id);
+    // EDITOR open with current caption
+    const handleEdit = () => {
+        if (!currentPost) return;
+        setDraftCaption(currentPost.content || '');
+        setIsEditorOpen(true);
+    };
+
+    // Save edited caption locally and cast
+    const handleEditorCast = async () => {
+        setQueue((prev) => {
+            const next = [...prev];
+            if (next[index]) next[index] = { ...next[index], content: draftCaption };
+            return next;
+        });
+        setIsEditorOpen(false);
+        await handleCast();
+    };
 
     const progressText = useMemo(() => {
         if (!total) return '0 of 0';
@@ -265,62 +279,55 @@ export default function PickAndCast() {
 
     const primaryActionLabel = tab === 'story' ? 'Story' : 'Post';
 
-    // Choose a reasonable default aspect for each type
-    const getAspect = (p?: Post, tab?: 'post' | 'story') => {
+    const getAspect = (p?: Post, t?: 'post' | 'story') => {
         if (!p) return '1 / 1';
-        if (tab === 'story') return '9 / 16';     // stories are typically vertical
-        if (p.code) return '9 / 16';              // reels (code present) -> vertical
-        return '1 / 1';                           // IG posts are usually square
+        if (t === 'story') return '9 / 16';
+        if (p.code) return '9 / 16';
+        return '1 / 1';
     };
-
 
     return (
         <div className="min-h-screen bg-[#e8e9eb] p-4">
             <div className="text-[#666] font-outfit text-base mb-6" />
 
-            <div className="bg-white rounded-[32px] max-w-sm mx-auto overflow-hidden">
+            <div className="bg-white rounded-[32px] max-w-sm mx-auto overflow-hidden relative">
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 pb-3">
                     <div className="flex items-center gap-3">
                         {profileLoading ? (
-                            <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+                            <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse" />
                         ) : profilePicUrl ? (
-                            <img 
+                            <img
                                 src={`/api/proxy-media?url=${encodeURIComponent(profilePicUrl)}`}
                                 alt={USERNAME}
                                 className="w-10 h-10 rounded-full object-cover"
                                 draggable={false}
                             />
                         ) : (
-                            <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
-                                <span className="text-gray-600 text-sm font-medium">
-                                    {USERNAME.charAt(0).toUpperCase()}
-                                </span>
-                            </div>
+                            <img
+                                src={DEFAULT_AVATAR}
+                                alt={USERNAME}
+                                className="w-10 h-10 rounded-full object-cover"
+                                draggable={false}
+                            />
                         )}
                         <div>
-                            <h1 className="text-black font-outfit text-xl font-medium">Pick and Post</h1>
+                            <h1 className="text-black font-outfit text-xl font-medium">Pick and cast</h1>
                             <p className="text-gray-500 font-outfit text-sm">@{USERNAME}</p>
                         </div>
                     </div>
-                    <button 
+                    <button
                         onClick={loadProfile}
                         disabled={profileLoading}
                         className="w-8 h-8 bg-black rounded-lg flex items-center justify-center hover:bg-gray-800 transition-colors disabled:opacity-50"
                         title="Refresh Profile Picture"
                     >
-                        {profileLoading ? (
-                            <svg className="w-4 h-4 text-white animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                        ) : (
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                <path
-                                    d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1L13.5 2.5L16.17 5.17C15.24 5.06 14.32 5 13.38 5C10.1 5 7.1 5.81 4.77 7.28C2.68 8.61 2 10.88 2 12C2 13.12 2.68 15.39 4.77 16.72C7.1 18.19 10.1 19 13.38 19C14.32 19 15.24 18.94 17.33 18.83L13.5 21.5L15 23L21 17V15H19V9H21ZM17.33 17.97C16.5 18.16 15.56 18.2 14.59 18.2C11.34 18.2 8.67 17.45 6.81 16.36C5.21 15.42 4.8 14.58 4.8 14C4.8 13.42 5.21 12.58 6.81 11.64C8.67 10.55 11.34 9.8 14.59 9.8C15.56 9.8 16.5 9.84 17.33 10.03V17.97Z"
-                                    fill="white"
-                                />
-                            </svg>
-                        )}
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <path
+                                d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1L13.5 2.5L16.17 5.17C15.24 5.06 14.32 5 13.38 5C10.1 5 7.1 5.81 4.77 7.28C2.68 8.61 2 10.88 2 12C2 13.12 2.68 15.39 4.77 16.72C7.1 18.19 10.1 19 13.38 19C14.32 19 15.24 18.94 17.33 18.83L13.5 21.5L15 23L21 17V15H19V9H21ZM17.33 17.97C16.5 18.16 15.56 18.2 14.59 18.2C11.34 18.2 8.67 17.45 6.81 16.36C5.21 15.42 4.8 14.58 4.8 14C4.8 13.42 5.21 12.58 6.81 11.64C8.67 10.55 11.34 9.8 14.59 9.8C15.56 9.8 16.5 9.84 17.33 10.03V17.97Z"
+                                fill="white"
+                            />
+                        </svg>
                     </button>
                 </div>
 
@@ -330,9 +337,7 @@ export default function PickAndCast() {
                         <button
                             type="button"
                             onClick={() => setTab('post')}
-                            className={`rounded-full px-6 py-3 font-outfit text-[18px] transition-all ${tab === 'post'
-                                ? 'bg-[#4a4653] text-white shadow-sm'
-                                : 'bg-transparent text-[#bfbfc4] hover:text-black'
+                            className={`rounded-full px-6 py-3 font-outfit text-[18px] transition-all ${tab === 'post' ? 'bg-[#4a4653] text-white shadow-sm' : 'bg-transparent text-[#bfbfc4] hover:text-black'
                                 }`}
                             aria-pressed={tab === 'post'}
                             aria-label="Show Posts"
@@ -343,9 +348,7 @@ export default function PickAndCast() {
                         <button
                             type="button"
                             onClick={() => setTab('story')}
-                            className={`rounded-full px-6 py-3 font-outfit text-[18px] transition-all ${tab === 'story'
-                                ? 'bg-[#4a4653] text-white shadow-sm'
-                                : 'bg-transparent text-[#bfbfc4] hover:text-black'
+                            className={`rounded-full px-6 py-3 font-outfit text-[18px] transition-all ${tab === 'story' ? 'bg-[#4a4653] text-white shadow-sm' : 'bg-transparent text-[#bfbfc4] hover:text-black'
                                 }`}
                             aria-pressed={tab === 'story'}
                             aria-label="Show Stories"
@@ -362,7 +365,7 @@ export default function PickAndCast() {
                             {tab === 'story' ? 'Loading stories…' : 'Loading posts + reels…'}
                         </div>
                     )}
-                    
+
                     <AnimatePresence mode="wait" initial={false} presenceAffectsLayout={false}>
                         {currentPost && (
                             <motion.div
@@ -373,7 +376,6 @@ export default function PickAndCast() {
                                 }}
                                 initial="enter"
                                 animate="center"
-                                // no exit variant → avoid double animation
                                 drag="x"
                                 dragElastic={0.18}
                                 dragMomentum={false}
@@ -386,9 +388,9 @@ export default function PickAndCast() {
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-3">
                                         {profileLoading ? (
-                                            <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+                                            <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse" />
                                         ) : profilePicUrl ? (
-                                            <img 
+                                            <img
                                                 src={`/api/proxy-media?url=${encodeURIComponent(profilePicUrl)}`}
                                                 alt={USERNAME}
                                                 className="w-10 h-10 rounded-full object-cover"
@@ -413,26 +415,21 @@ export default function PickAndCast() {
                                         </svg>
                                     </button>
                                 </div>
-                                {/* Media Display */}
+
+                                {/* Media */}
                                 {(() => {
                                     const aspect = getAspect(currentPost, tab);
-                                    const imgUrl =
-                                        currentPost?.image
-                                            ? `/api/proxy-media?url=${encodeURIComponent(currentPost.image)}`
-                                            : null;
-                                    const vidUrl =
-                                        currentPost?.mediaUrl
-                                            ? `/api/proxy-media?url=${encodeURIComponent(currentPost.mediaUrl)}`
-                                            : null;
+                                    const imgUrl = currentPost?.image
+                                        ? `/api/proxy-media?url=${encodeURIComponent(currentPost.image)}`
+                                        : null;
+                                    const vidUrl = currentPost?.mediaUrl
+                                        ? `/api/proxy-media?url=${encodeURIComponent(currentPost.mediaUrl)}`
+                                        : null;
 
                                     return (
                                         <div
                                             className="rounded-2xl overflow-hidden mb-4 bg-[#f0f0f0] relative w-full"
-                                            style={{
-                                                aspectRatio: aspect,
-                                                maxHeight: tab === 'story' ? '60vh' : '50vh',
-                                                minHeight: '200px'
-                                            }}
+                                            style={{ aspectRatio: aspect, maxHeight: tab === 'story' ? '60vh' : '50vh', minHeight: '200px' }}
                                         >
                                             {vidUrl ? (
                                                 <video
@@ -459,8 +456,9 @@ export default function PickAndCast() {
                                     );
                                 })()}
 
-                                {currentPost.content && (
-                                    <div className="text-black font-outfit text-sm leading-relaxed mb-2">
+                                {/* Caption */}
+                                {!!currentPost.content && (
+                                    <div className="text-black font-outfit text-sm leading-relaxed mb-2 whitespace-pre-wrap">
                                         {currentPost.content}
                                     </div>
                                 )}
@@ -472,43 +470,30 @@ export default function PickAndCast() {
                     {!loading && (!currentPost || index >= total) && (
                         <div className="bg-[#F8F8F8] rounded-3xl p-6 mb-6 text-center">
                             <div className="font-outfit text-md text-[#333] mb-2">You’re all caught up</div>
-                            <div className="text-[#666] text-sm">
-                                {tab === 'story'
-                                    ? 'No active stories right now.'
-                                    : 'Try another Instagram username.'}
-                            </div>
+                            <div className="text-[#666] text-sm">{tab === 'story' ? 'No active stories right now.' : 'Try another Instagram username.'}</div>
                         </div>
                     )}
                 </div>
 
                 {/* Footer actions */}
                 <div className="flex items-center justify-between px-6 py-4 border-t border-[#F0F0F0]">
-                    <button
-                        onClick={() => (currentPost ? handleIgnore() : undefined)}
-                        className="flex flex-col items-center gap-2 p-2 hover:bg-gray-50 rounded-lg transition-colors"
-                    >
+                    <button onClick={() => (currentPost ? handleIgnore() : undefined)} className="flex flex-col items-center gap-2 p-2 hover:bg-gray-50 rounded-lg transition-colors">
                         <div className="flex items-center justify-center">
                             <img src="/Icon/ignoreIcon.svg" alt="Ignore" className="w-12 h-12" />
                         </div>
                         <span className="text-[#666] font-outfit text-xs">Ignore</span>
                     </button>
 
-                    <button
-                        onClick={handleEdit}
-                        className="flex flex-col items-center gap-2 p-2 hover:bg-gray-50 rounded-lg transition-colors"
-                    >
+                    <button onClick={handleEdit} className="flex flex-col items-center gap-2 p-2 hover:bg-gray-50 rounded-lg transition-colors">
                         <div className="flex items-center justify-center">
                             <img src="/Icon/editIcon.svg" alt="Edit" className="w-12 h-12" />
                         </div>
                         <span className="text-[#666] font-outfit text-xs">Edit</span>
                     </button>
 
-                    <button
-                        onClick={() => (currentPost ? handleCast() : undefined)}
-                        className="flex flex-col items-center gap-2 p-2 hover:bg-gray-50 rounded-lg transition-colors"
-                    >
+                    <button onClick={() => (currentPost ? handleCast() : undefined)} className="flex flex-col items-center gap-2 p-2 hover:bg-gray-50 rounded-lg transition-colors">
                         <div className="flex items-center justify-center">
-                            <img src="/Icon/rightArrowIcon.svg" alt="Edit" className="w-12 h-12" />
+                            <img src="/Icon/rightArrowIcon.svg" alt="Cast" className="w-12 h-12" />
                         </div>
                         <span className="text-[#666] font-outfit text-xs">{primaryActionLabel}</span>
                     </button>
@@ -531,6 +516,98 @@ export default function PickAndCast() {
                         </svg>
                     </Link>
                 </div>
+                <AnimatePresence>
+                    {isEditorOpen && (
+                        <>
+                            {/* Backdrop */}
+                            <motion.div
+                                className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setIsEditorOpen(false)}
+                            />
+
+
+                            <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:p-5 pointer-events-none">
+                                <motion.div
+                                    role="dialog"
+                                    aria-modal="true"
+                                    className="
+            pointer-events-auto w-full max-w-sm
+            bg-white rounded-[28px] shadow-2xl overflow-hidden
+          "
+                                    // Slide up, allow drag to dismiss
+                                    initial={{ y: '100%' }}
+                                    animate={{ y: 0 }}
+                                    exit={{ y: '100%' }}
+                                    transition={{ type: 'spring', stiffness: 420, damping: 40 }}
+                                    drag="y"
+                                    dragConstraints={{ top: 0, bottom: 0 }}
+                                    dragElastic={{ top: 0, bottom: 0.4 }}
+                                    onDragEnd={(_, info) => {
+                                        if (info.offset.y > 120 || info.velocity.y > 800) setIsEditorOpen(false);
+                                    }}
+
+                                    style={{
+                                        maxHeight: 'min(86dvh, 720px)',
+                                    }}
+                                >
+                                    <div className="px-5 pt-4">
+                                        <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-gray-300" />
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-lg font-semibold font-outfit">Edit post</h3>
+                                            <button
+                                                onClick={() => setIsEditorOpen(false)}
+                                                className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-100"
+                                                aria-label="Close editor"
+                                            >
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                                    <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                                </svg>
+                                            </button>
+                                        </div>
+
+                                        <img src="/Icon/curvyLineIcon.svg" alt="Edit" className="mb-6" />
+                                    </div>
+
+                                    {/* Scrollable content (stays inside rounded box) */}
+                                    <div
+                                        className="px-5 mt-3 overflow-auto"
+                                        style={{
+                                            maxHeight: 'calc(min(86dvh, 720px) - 168px)',
+                                        }}
+                                    >
+                                        <textarea
+                                            className="w-full h-[240px] sm:h-[280px] rounded-2xl bg-[#F3F3F4] p-4
+                         outline-none resize-none font-outfit text-[15px] leading-6 text-[#161616]
+                         focus:ring-2 focus:ring-black/10"
+                                            value={draftCaption}
+                                            onChange={(e) => setDraftCaption(e.target.value)}
+                                            placeholder="Write your caption…"
+                                        />
+                                    </div>
+
+                                  
+                                    <div
+                                        className="px-5 mt-4"
+                                        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 14px)' }}
+                                    >
+                                        <button
+                                            onClick={handleEditorCast}
+                                            className="w-full bg-black text-white font-outfit text-base py-4 rounded-2xl
+                         shadow-[0_8px_0_0_rgba(0,0,0,0.18)]
+                         active:translate-y-[2px] active:shadow-[0_6px_0_0_rgba(0,0,0,0.18)]"
+                                        >
+                                            Post
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            </div>
+                        </>
+                    )}
+                </AnimatePresence>
+
             </div>
         </div>
     );
