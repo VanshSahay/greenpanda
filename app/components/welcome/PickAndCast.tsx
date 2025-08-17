@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
     motion,
     AnimatePresence,
@@ -57,6 +57,10 @@ export default function PickAndCast() {
 
     const [tab, setTab] = useState<'post' | 'story'>('post');
 
+    // Profile state
+    const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+    const [profileLoading, setProfileLoading] = useState(false);
+
     // Motion values
     const x = useMotionValue(0);
     const rotate = useTransform(x, [-300, 0, 300], [-12, 0, 12]);
@@ -65,10 +69,44 @@ export default function PickAndCast() {
         x.set(0); // reset swipe offset when index changes
     }, [index, x]);
 
+    // Load profile on component mount
+    useEffect(() => {
+        loadProfile();
+    }, []);
+
+    // Load profile picture
+    const loadProfile = async () => {
+        try {
+            setProfileLoading(true);
+            const res = await fetch('/api/profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username_or_url: USERNAME }),
+                cache: 'no-store',
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to fetch profile');
+
+            if (data.success && data.profilePicUrl) {
+                setProfilePicUrl(data.profilePicUrl);
+                console.log('Profile picture loaded:', data.profilePicUrl);
+            }
+        } catch (e) {
+            console.error('Error loading profile:', e);
+        } finally {
+            setProfileLoading(false);
+        }
+    };
+
     // API item -> UI Post
     const mapToPost = (m: ApiItem): Post => ({
         id: m.id, // backend already stabilizes id
-        author: { name: USERNAME, username: USERNAME, avatar: DEFAULT_AVATAR },
+        author: { 
+            name: USERNAME, 
+            username: USERNAME, 
+            avatar: profilePicUrl || DEFAULT_AVATAR 
+        },
         image: m.thumbnail ?? null,
         content: '',
         hashtags: [],
@@ -81,7 +119,7 @@ export default function PickAndCast() {
 
     const loadPage = async (cursor: string | null, mode: 'post' | 'story' = 'post') => {
         const endpoint = mode === 'story' ? '/api/stories' : '/api/posts';
-        const payload: any = { username_or_url: USERNAME };
+        const payload: { username_or_url: string; after?: string } = { username_or_url: USERNAME };
         if (mode === 'post' && cursor) payload.after = cursor; // posts paginate; stories don't
 
         const res = await fetch(endpoint, {
@@ -243,15 +281,47 @@ export default function PickAndCast() {
             <div className="bg-white rounded-[32px] max-w-sm mx-auto overflow-hidden">
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 pb-3">
-                    <h1 className="text-black font-outfit text-xl font-medium">Pick and Post</h1>
-                    <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                            <path
-                                d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1L13.5 2.5L16.17 5.17C15.24 5.06 14.32 5 13.38 5C10.1 5 7.1 5.81 4.77 7.28C2.68 8.61 2 10.88 2 12C2 13.12 2.68 15.39 4.77 16.72C7.1 18.19 10.1 19 13.38 19C14.32 19 15.24 18.94 17.33 18.83L13.5 21.5L15 23L21 17V15H19V9H21ZM17.33 17.97C16.5 18.16 15.56 18.2 14.59 18.2C11.34 18.2 8.67 17.45 6.81 16.36C5.21 15.42 4.8 14.58 4.8 14C4.8 13.42 5.21 12.58 6.81 11.64C8.67 10.55 11.34 9.8 14.59 9.8C15.56 9.8 16.5 9.84 17.33 10.03V17.97Z"
-                                fill="white"
+                    <div className="flex items-center gap-3">
+                        {profileLoading ? (
+                            <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+                        ) : profilePicUrl ? (
+                            <img 
+                                src={`/api/proxy-media?url=${encodeURIComponent(profilePicUrl)}`}
+                                alt={USERNAME}
+                                className="w-10 h-10 rounded-full object-cover"
+                                draggable={false}
                             />
-                        </svg>
+                        ) : (
+                            <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
+                                <span className="text-gray-600 text-sm font-medium">
+                                    {USERNAME.charAt(0).toUpperCase()}
+                                </span>
+                            </div>
+                        )}
+                        <div>
+                            <h1 className="text-black font-outfit text-xl font-medium">Pick and Post</h1>
+                            <p className="text-gray-500 font-outfit text-sm">@{USERNAME}</p>
+                        </div>
                     </div>
+                    <button 
+                        onClick={loadProfile}
+                        disabled={profileLoading}
+                        className="w-8 h-8 bg-black rounded-lg flex items-center justify-center hover:bg-gray-800 transition-colors disabled:opacity-50"
+                        title="Refresh Profile Picture"
+                    >
+                        {profileLoading ? (
+                            <svg className="w-4 h-4 text-white animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                        ) : (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path
+                                    d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1L13.5 2.5L16.17 5.17C15.24 5.06 14.32 5 13.38 5C10.1 5 7.1 5.81 4.77 7.28C2.68 8.61 2 10.88 2 12C2 13.12 2.68 15.39 4.77 16.72C7.1 18.19 10.1 19 13.38 19C14.32 19 15.24 18.94 17.33 18.83L13.5 21.5L15 23L21 17V15H19V9H21ZM17.33 17.97C16.5 18.16 15.56 18.2 14.59 18.2C11.34 18.2 8.67 17.45 6.81 16.36C5.21 15.42 4.8 14.58 4.8 14C4.8 13.42 5.21 12.58 6.81 11.64C8.67 10.55 11.34 9.8 14.59 9.8C15.56 9.8 16.5 9.84 17.33 10.03V17.97Z"
+                                    fill="white"
+                                />
+                            </svg>
+                        )}
+                    </button>
                 </div>
 
                 {/* Segmented control */}
@@ -315,12 +385,23 @@ export default function PickAndCast() {
                                 {/* Header */}
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-3">
-                                        <img
-                                            src={DEFAULT_AVATAR}
-                                            alt={USERNAME}
-                                            className="w-10 h-10 rounded-full object-cover"
-                                            draggable={false}
-                                        />
+                                        {profileLoading ? (
+                                            <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+                                        ) : profilePicUrl ? (
+                                            <img 
+                                                src={`/api/proxy-media?url=${encodeURIComponent(profilePicUrl)}`}
+                                                alt={USERNAME}
+                                                className="w-10 h-10 rounded-full object-cover"
+                                                draggable={false}
+                                            />
+                                        ) : (
+                                            <img
+                                                src={DEFAULT_AVATAR}
+                                                alt={USERNAME}
+                                                className="w-10 h-10 rounded-full object-cover"
+                                                draggable={false}
+                                            />
+                                        )}
                                         <div>
                                             <div className="font-outfit text-sm font-medium text-black">{USERNAME}</div>
                                             <div className="font-outfit text-xs text-[#666]">@{USERNAME}</div>
