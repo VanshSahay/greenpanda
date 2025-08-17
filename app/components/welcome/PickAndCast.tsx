@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
     motion,
     AnimatePresence,
@@ -87,17 +87,19 @@ export default function PickAndCast() {
 
     // COIN CREATION state
     const [coinCreationStatus, setCoinCreationStatus] = useState<"idle" | "pending" | "success" | "error">("idle");
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [coinResult, setCoinResult] = useState<{hash: `0x${string}`; address: `0x${string}` | undefined} | null>(null);
 
     // Motion values
     const UP_TRIGGER = 120;                 // px to trigger editor
     const [upProgress, setUpProgress] = useState(0);
 
-    // Motion values (now support vertical too)
+    // Motion values
     const x = useMotionValue(0);
-    const y = useMotionValue(0);
     const rotate = useTransform(x, [-300, 0, 300], [-12, 0, 12]);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const opacity = useTransform(x, [-150, 0, 150], [0.7, 1, 0.7]);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const scale = useTransform(x, [-150, 0, 150], [0.95, 1, 0.95]);
     
     // Visual feedback for swipe actions
@@ -171,7 +173,8 @@ export default function PickAndCast() {
         return 'image/jpeg'; // Default for images
     };
 
-    // Helper function to create video thumbnail
+    // Helper function to create video thumbnail (kept for future use)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const createVideoThumbnail = (videoFile: File): Promise<File> => {
         return new Promise((resolve, reject) => {
             const video = document.createElement('video');
@@ -260,7 +263,7 @@ export default function PickAndCast() {
             const walletClient = createWalletClient({
                 chain: base,
                 transport: http(process.env.NEXT_PUBLIC_RPC_URL || 'https://mainnet.base.org'),
-                account: account as any, // Type assertion to bypass viem version compatibility
+                account: account as unknown as `0x${string}`, // Type assertion for viem compatibility
             });
 
             // Generate coin details from caption
@@ -431,8 +434,7 @@ export default function PickAndCast() {
 
     useEffect(() => {
         x.set(0);
-        y.set(0);
-    }, [index, x, y]);
+    }, [index, x]);
 
     // Profile loader
     useEffect(() => {
@@ -449,15 +451,15 @@ export default function PickAndCast() {
                 if (!res.ok) throw new Error(data.error || 'Failed to fetch profile');
                 if (data.success && data.profilePicUrl) setProfilePicUrl(data.profilePicUrl);
             } catch (e) {
-                console.error('Error loading profile:', e);
+                console.error('Error loading profile', e);
             } finally {
                 setProfileLoading(false);
             }
         })();
-    }, []);
+    }, [USERNAME]);
 
     // Map API → UI
-    const mapToPost = (m: ApiItem): Post => ({
+    const mapToPost = useCallback((m: ApiItem): Post => ({
         id: m.id,
         author: { name: USERNAME, username: USERNAME, avatar: profilePicUrl || DEFAULT_AVATAR },
         image: m.thumbnail ?? null,
@@ -468,10 +470,10 @@ export default function PickAndCast() {
         code: m.code ?? undefined,
         takenAt: m.takenAt ?? null,
         mediaUrl: m.mediaUrl ?? null,
-    });
+    }), [USERNAME, profilePicUrl]);
 
     // Fetch page (posts or stories)
-    const loadPage = async (cursor: string | null, mode: 'post' | 'story' = 'post') => {
+    const loadPage = useCallback(async (cursor: string | null, mode: 'post' | 'story' = 'post') => {
         const endpoint = mode === 'story' ? '/api/stories' : '/api/posts';
         const payload: { username_or_url: string; after?: string } = { username_or_url: USERNAME };
         if (mode === 'post' && cursor) payload.after = cursor;
@@ -501,7 +503,7 @@ export default function PickAndCast() {
         setHasMore(mode === 'post' ? Boolean(data.pageInfo?.hasNextPage) : false);
         setAfter(mode === 'post' ? data.pageInfo?.endCursor ?? null : null);
         if (mode === 'story' && (!data.items || data.items.length === 0)) setNotice('No active stories right now.');
-    };
+    }, [USERNAME]);
 
     // Initial & on tab change
     useEffect(() => {
@@ -528,7 +530,7 @@ export default function PickAndCast() {
         return () => {
             alive = false;
         };
-    }, [tab]);
+    }, [tab, USERNAME]);
 
     // Lock scroll when editor is open
     useEffect(() => {
@@ -587,6 +589,8 @@ export default function PickAndCast() {
         const fastLeft = info.velocity.x < -600;
         const farRight = info.offset.x > 120;
         const fastRight = info.velocity.x > 600;
+        const farUp = info.offset.y < -UP_TRIGGER;
+        const fastUp = info.velocity.y < -600;
         
         if (farLeft || fastLeft) {
             flyOutLeft();
@@ -595,6 +599,12 @@ export default function PickAndCast() {
         
         if (farRight || fastRight) {
             flyOutRight();
+            return;
+        }
+        
+        // Check for upward swipe to open editor
+        if (farUp || fastUp) {
+            handleEdit();
             return;
         }
         
@@ -618,6 +628,12 @@ export default function PickAndCast() {
         if (!currentPost) return;
         setDraftCaption(currentPost.content || '');
         setIsEditorOpen(true);
+        
+        // Add a small delay to make the transition feel natural after the swipe
+        setTimeout(() => {
+            // Reset the up progress after opening editor
+            setUpProgress(0);
+        }, 100);
     };
 
     const handleEditorCast = async () => {
@@ -731,19 +747,66 @@ export default function PickAndCast() {
                                 }}
                                 initial="enter"
                                 animate="center"
-                                drag                          // allow both axes
-                                dragDirectionLock             // lock axis after a small movement
-                                dragElastic={0.18}
-                                dragMomentum={false}
-                                style={{ x, y, rotate }}
-                                onUpdate={(latest) => {
-                                    // latest.y is negative when dragging up
-                                    const val = typeof latest.y === 'number' ? latest.y : y.get();
-                                    const prog = Math.min(1, Math.max(0, (-val) / UP_TRIGGER));
-                                    setUpProgress(prog);
-                                }}
-                                onDragEnd={onDragEnd}
-                                whileTap={{ scale: 0.995 }}
+                                                                 drag="x"                      // only allow horizontal dragging
+                                 dragElastic={0.18}
+                                 dragMomentum={false}
+                                                                 style={{ 
+                                     x, 
+                                     rotate
+                                 }}
+                                                                                                  onDragStart={() => {
+                                     // Reset progress when starting drag
+                                     setUpProgress(0);
+                                 }}
+                                 onDragEnd={onDragEnd}
+                                 whileTap={{ scale: 0.995 }}
+                                 onTouchStart={(e) => {
+                                     const touch = e.touches[0];
+                                     if (touch) {
+                                         // Store initial touch position
+                                         (e.currentTarget as HTMLElement & { _touchStartY?: number; _touchStartTime?: number })._touchStartY = touch.clientY;
+                                         (e.currentTarget as HTMLElement & { _touchStartY?: number; _touchStartTime?: number })._touchStartTime = Date.now();
+                                     }
+                                 }}
+                                 onTouchMove={(e) => {
+                                     const touch = e.touches[0];
+                                     const target = e.currentTarget as HTMLElement & { _touchStartY?: number; _touchStartTime?: number };
+                                     if (touch && target._touchStartY !== undefined) {
+                                         const startY = target._touchStartY;
+                                         const currentY = touch.clientY;
+                                         const deltaY = startY - currentY; // Positive when swiping up
+                                         
+                                         if (deltaY > 0) { // Only track upward swipes
+                                             const prog = Math.min(1, Math.max(0, deltaY / UP_TRIGGER));
+                                             setUpProgress(prog);
+                                         }
+                                     }
+                                 }}
+                                 onTouchEnd={(e) => {
+                                     const touch = e.changedTouches[0];
+                                     const target = e.currentTarget as HTMLElement & { _touchStartY?: number; _touchStartTime?: number };
+                                     if (touch && target._touchStartY !== undefined) {
+                                         const startY = target._touchStartY;
+                                         const endY = touch.clientY;
+                                         const deltaY = startY - endY; // Positive when swiping up
+                                         const startTime = target._touchStartTime ?? Date.now();
+                                         const endTime = Date.now();
+                                         const duration = endTime - startTime;
+                                         const velocity = deltaY / duration;
+                                         
+                                         // Check if swipe up was sufficient to trigger editor
+                                         if (deltaY > UP_TRIGGER || velocity > 0.8) { // 0.8 px/ms threshold
+                                             handleEdit();
+                                         }
+                                         
+                                         // Reset progress
+                                         setUpProgress(0);
+                                         
+                                         // Clean up stored values
+                                         delete target._touchStartY;
+                                         delete target._touchStartTime;
+                                     }
+                                 }}
                                 className="relative bg-[#F8F8F8] rounded-3xl p-4 mb-6"
                             >
                                 {/* Swipe Action Overlays */}
@@ -769,18 +832,37 @@ export default function PickAndCast() {
 
                                 {/* Header */}
 
-                                {/* Pull-up to edit hint */}
-                                <motion.div
-                                    className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-white text-xs font-outfit shadow"
-                                    style={{
-                                        opacity: upProgress,              // fade in as you pull
-                                        scale: 0.9 + upProgress * 0.1,    // tiny pop
-                                        background: `rgba(0,0,0,${0.35 + 0.4 * upProgress})`,
-                                        pointerEvents: 'none'
-                                    }}
-                                >
-                                    {upProgress < 1 ? 'Pull up to edit' : 'Release to edit'}
-                                </motion.div>
+                                                                 {/* Pull-up to edit hint */}
+                                 <motion.div
+                                     className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-white text-xs font-outfit shadow"
+                                     style={{
+                                         opacity: upProgress,              // fade in as you pull
+                                         background: `rgba(0,0,0,${0.35 + 0.4 * upProgress})`,
+                                         pointerEvents: 'none'
+                                     }}
+                                 >
+                                     {upProgress < 1 ? 'Pull up to edit' : 'Release to edit'}
+                                 </motion.div>
+                                 
+                                 {/* Visual feedback for upward swipe */}
+                                 {upProgress > 0.3 && (
+                                     <motion.div
+                                         className="absolute inset-0 bg-blue-500/10 rounded-3xl border-2 border-blue-400/30 pointer-events-none"
+                                         style={{
+                                             opacity: upProgress
+                                         }}
+                                     />
+                                 )}
+                                 
+                                 {/* Subtle upward movement indicator */}
+                                 {upProgress > 0.1 && (
+                                     <motion.div
+                                         className="absolute -top-2 left-1/2 -translate-x-1/2 w-1 h-2 bg-blue-400 rounded-full pointer-events-none"
+                                         style={{
+                                             opacity: upProgress
+                                         }}
+                                     />
+                                 )}
 
 
                                 {/* Card header */}
@@ -930,14 +1012,19 @@ export default function PickAndCast() {
                             />
 
                             <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:p-5 pointer-events-none">
-                                <motion.div
-                                    role="dialog"
-                                    aria-modal="true"
-                                    className="pointer-events-auto w-full max-w-sm bg-white rounded-[28px] shadow-2xl overflow-hidden"
-                                    initial={{ y: '100%' }}
-                                    animate={{ y: 0 }}
-                                    exit={{ y: '100%' }}
-                                    transition={{ type: 'spring', stiffness: 420, damping: 40 }}
+                                                                 <motion.div
+                                     role="dialog"
+                                     aria-modal="true"
+                                     className="pointer-events-auto w-full max-w-sm bg-white rounded-[28px] shadow-2xl overflow-hidden"
+                                     initial={{ y: '100%', scale: 0.95 }}
+                                     animate={{ y: 0, scale: 1 }}
+                                     exit={{ y: '100%', scale: 0.95 }}
+                                     transition={{ 
+                                         type: 'spring', 
+                                         stiffness: 420, 
+                                         damping: 40,
+                                         scale: { delay: 0.1, duration: 0.2 }
+                                     }}
                                     drag="y"
                                     dragConstraints={{ top: 0, bottom: 0 }}
                                     dragElastic={{ top: 0, bottom: 0.4 }}
