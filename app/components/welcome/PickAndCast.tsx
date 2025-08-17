@@ -227,6 +227,15 @@ export default function PickAndCast() {
 
     const primaryActionLabel = tab === 'story' ? 'Story' : 'Post';
 
+    // Choose a reasonable default aspect for each type
+    const getAspect = (p?: Post, tab?: 'post' | 'story') => {
+        if (!p) return '1 / 1';
+        if (tab === 'story') return '9 / 16';     // stories are vertical
+        if (p.code) return '9 / 16';              // reels (code present) -> vertical
+        return '4 / 5';                           // IG post portrait default
+    };
+
+
     return (
         <div className="min-h-screen bg-[#e8e9eb] p-4">
             <div className="text-[#666] font-outfit text-base mb-6" />
@@ -252,8 +261,8 @@ export default function PickAndCast() {
                             type="button"
                             onClick={() => setTab('post')}
                             className={`rounded-full px-6 py-3 font-outfit text-[18px] transition-all ${tab === 'post'
-                                    ? 'bg-[#4a4653] text-white shadow-sm'
-                                    : 'bg-transparent text-[#bfbfc4] hover:text-black'
+                                ? 'bg-[#4a4653] text-white shadow-sm'
+                                : 'bg-transparent text-[#bfbfc4] hover:text-black'
                                 }`}
                             aria-pressed={tab === 'post'}
                             aria-label="Show Posts"
@@ -265,8 +274,8 @@ export default function PickAndCast() {
                             type="button"
                             onClick={() => setTab('story')}
                             className={`rounded-full px-6 py-3 font-outfit text-[18px] transition-all ${tab === 'story'
-                                    ? 'bg-[#4a4653] text-white shadow-sm'
-                                    : 'bg-transparent text-[#bfbfc4] hover:text-black'
+                                ? 'bg-[#4a4653] text-white shadow-sm'
+                                : 'bg-transparent text-[#bfbfc4] hover:text-black'
                                 }`}
                             aria-pressed={tab === 'story'}
                             aria-label="Show Stories"
@@ -340,61 +349,47 @@ export default function PickAndCast() {
                                     </button>
                                 </div>
                                 {/* Media Display */}
-                                <div className="rounded-2xl overflow-hidden mb-4 bg-[#f0f0f0]">
-                                    {currentPost.image ? (
-                                        <img 
-                                            src={`/api/proxy-media?url=${encodeURIComponent(currentPost.image)}`}
-                                            alt={tab === 'story' ? 'Instagram story' : 'Instagram post'} 
-                                            className="w-full h-48 object-cover" 
-                                            draggable={false}
-                                            onError={(e) => {
-                                                // Fallback if proxy fails
-                                                e.currentTarget.style.display = 'none';
-                                                e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                            }}
-                                        />
-                                    ) : currentPost.mediaUrl ? (
-                                        <div className="relative">
-                                            <video 
-                                                className="w-full h-48 object-cover" 
-                                                controls
-                                                muted
-                                                playsInline
-                                                poster={currentPost.image ? `/api/proxy-media?url=${encodeURIComponent(currentPost.image)}` : undefined}
-                                                onError={(e) => {
-                                                    // Fallback if video fails
-                                                    e.currentTarget.style.display = 'none';
-                                                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                                }}
-                                            >
-                                                <source src={`/api/proxy-media?url=${encodeURIComponent(currentPost.mediaUrl)}`} type="video/mp4" />
-                                                Your browser does not support the video tag.
-                                            </video>
-                                            <div className="hidden absolute inset-0 flex items-center justify-center bg-[#f0f0f0]">
-                                                <div className="text-center">
-                                                    <div className="text-2xl mb-2">🎥</div>
-                                                    <div className="text-[#666] text-sm">Video Story</div>
+                                {(() => {
+                                    const aspect = getAspect(currentPost, tab);
+                                    const imgUrl =
+                                        currentPost?.image
+                                            ? `/api/proxy-media?url=${encodeURIComponent(currentPost.image)}`
+                                            : null;
+                                    const vidUrl =
+                                        currentPost?.mediaUrl
+                                            ? `/api/proxy-media?url=${encodeURIComponent(currentPost.mediaUrl)}`
+                                            : null;
+
+                                    return (
+                                        <div
+                                            className="rounded-2xl overflow-hidden mb-4 bg-[#f0f0f0] relative"
+                                            style={{ aspectRatio: aspect, maxHeight: '70vh' }} // prevent overly tall cards
+                                        >
+                                            {vidUrl ? (
+                                                <video
+                                                    className="absolute inset-0 w-full h-full object-cover"
+                                                    src={vidUrl}
+                                                    poster={imgUrl ?? undefined}
+                                                    controls
+                                                    muted
+                                                    playsInline
+                                                />
+                                            ) : imgUrl ? (
+                                                <img
+                                                    className="absolute inset-0 w-full h-full object-cover"
+                                                    src={imgUrl}
+                                                    alt={tab === 'story' ? 'Instagram story' : 'Instagram post'}
+                                                    draggable={false}
+                                                />
+                                            ) : (
+                                                <div className="absolute inset-0 w-full h-full flex items-center justify-center text-[#666]">
+                                                    Media unavailable
                                                 </div>
-                                            </div>
+                                            )}
                                         </div>
-                                    ) : (
-                                        <div className="w-full h-48 flex items-center justify-center">
-                                            <div className="text-center">
-                                                <div className="text-2xl mb-2">📷</div>
-                                                <div className="text-[#666] text-sm">
-                                                    {tab === 'story' ? 'Instagram Story' : 'Instagram Post'}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {/* Hidden fallback for image errors */}
-                                    <div className="hidden w-full h-48 flex items-center justify-center">
-                                        <div className="text-center">
-                                            <div className="text-2xl mb-2">🖼️</div>
-                                            <div className="text-[#666] text-sm">Media unavailable</div>
-                                        </div>
-                                    </div>
-                                </div>
+                                    );
+                                })()}
+
 
                                 {/* Caption (none from this API) */}
                                 {currentPost.content && (
