@@ -1,4 +1,5 @@
 // app/api/posts/route.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -6,7 +7,10 @@ export const dynamic = 'force-dynamic';
 const HOST = 'instagram-scraper-stable-api.p.rapidapi.com';
 const BASE = `https://${HOST}`;
 
-type PostsJSON = any;
+type PostsJSON = {
+  data?: { user?: { edge_owner_to_timeline_media?: { edges?: unknown[]; page_info?: unknown } } };
+  [key: string]: unknown;
+};
 
 function pickLargest(cands?: Array<{ url?: string; width?: number }>) {
   if (!Array.isArray(cands) || !cands.length) return null;
@@ -113,7 +117,7 @@ export async function POST(req: Request) {
     json?.data?.user?.edge_owner_to_timeline_media?.page_info ?? {};
   const nextCursor =
     json?.pagination_token ??
-    pageInfo?.end_cursor ??
+    (pageInfo as Record<string, unknown>)?.end_cursor ??
     null;
 
   return NextResponse.json({

@@ -1,4 +1,5 @@
 // app/api/stories/route.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -6,17 +7,23 @@ export const dynamic = 'force-dynamic';
 const HOST = 'instagram-scraper-stable-api.p.rapidapi.com';
 const BASE = `https://${HOST}`;
 
-type StoriesJSON = any;
+type StoriesJSON = {
+  stories?: unknown[];
+  items?: unknown[];
+  reels?: unknown[];
+  [key: string]: unknown;
+};
 
 function pickLargest(cands?: Array<{ url?: string; width?: number }>) {
   if (!Array.isArray(cands) || !cands.length) return null;
   return cands.slice().sort((a, b) => (b.width ?? 0) - (a.width ?? 0))[0]?.url ?? null;
 }
 
-function extractTakenAt(n: any): number | null {
+function extractTakenAt(n: Record<string, unknown>): number | null {
   if (typeof n?.taken_at === 'number') return n.taken_at;
   if (typeof n?.taken_at_timestamp === 'number') return n.taken_at_timestamp;
-  if (typeof n?.caption?.created_at === 'number') return n.caption.created_at;
+  const caption = n?.caption as Record<string, unknown>;
+  if (typeof caption?.created_at === 'number') return caption.created_at;
   return null;
 }
 
@@ -24,7 +31,7 @@ export async function POST(req: Request) {
   const key = process.env.RAPIDAPI_KEY;
   if (!key) return NextResponse.json({ error: 'Missing RAPIDAPI_KEY' }, { status: 500 });
 
-  const { username_or_url } = await req.json().catch(() => ({} as any));
+  const { username_or_url } = await req.json().catch(() => ({} as Record<string, unknown>));
   if (!username_or_url) {
     return NextResponse.json({ error: 'Missing body.username_or_url' }, { status: 400 });
   }
@@ -65,25 +72,25 @@ export async function POST(req: Request) {
     (Array.isArray(json?.reels) && json.reels) ||
     [];
 
-  const items = (raw as any[]).map((it, i) => {
+  const items = (raw as Record<string, unknown>[]).map((it, i) => {
     // Stories come directly, no need for nested node/media access
     const n = it;
 
-    const thumb =
-      pickLargest(n?.image_versions2?.candidates) ||
-      null;
+    const imageVersions = (n as Record<string, unknown>)?.image_versions2 as Record<string, unknown>;
+    const thumb = pickLargest(imageVersions?.candidates as Array<{ url?: string; width?: number }>) || null;
 
+    const videoVersions = (n as Record<string, unknown>)?.video_versions;
     const mediaUrl =
-      (Array.isArray(n?.video_versions) && n.video_versions[0]?.url) ||
+      (Array.isArray(videoVersions) && (videoVersions[0] as Record<string, unknown>)?.url as string) ||
       null;
 
     return {
-      id: String(n?.id ?? n?.pk ?? n?.code ?? i),
-      code: n?.code ?? n?.shortcode ?? null, // sometimes present
+      id: String((n as Record<string, unknown>)?.id ?? (n as Record<string, unknown>)?.pk ?? (n as Record<string, unknown>)?.code ?? i),
+      code: (n as Record<string, unknown>)?.code as string ?? (n as Record<string, unknown>)?.shortcode as string ?? null,
       thumbnail: thumb,
       mediaUrl,
       stats: null,
-      takenAt: extractTakenAt(n),
+      takenAt: extractTakenAt(n as Record<string, unknown>),
     };
   }).filter((x) => x.thumbnail || x.mediaUrl);
 

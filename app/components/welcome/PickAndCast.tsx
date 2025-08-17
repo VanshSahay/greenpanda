@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
     motion,
     AnimatePresence,
@@ -38,8 +38,7 @@ type ApiResponse = {
     error?: string;
 };
 
-const DEFAULT_AVATAR =
-    'https://images.unsplash.com/photo-1494790108755-2616b612b47c?w=40&h=40&fit=crop&crop=face';
+const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1494790108755-2616b612b47c?w=40&h=40&fit=crop&crop=face';
 const USERNAME = "icc";
 
 export default function PickAndCast() {
@@ -78,9 +77,9 @@ export default function PickAndCast() {
     });
 
     // Endpoint switcher
-    const loadPage = async (cursor: string | null, mode: 'post' | 'story' = 'post') => {
+    const loadPage = useCallback(async (cursor: string | null, mode: 'post' | 'story' = 'post') => {
         const endpoint = mode === 'story' ? '/api/stories' : '/api/posts';
-        const payload: any = { username_or_url: USERNAME };
+        const payload: { username_or_url: string; after?: string } = { username_or_url: USERNAME };
         if (mode === 'post' && cursor) payload.after = cursor; // posts paginate; stories don't
 
         const res = await fetch(endpoint, {
@@ -112,7 +111,7 @@ export default function PickAndCast() {
         if (mode === 'story' && (!data.items || data.items.length === 0)) {
             setNotice('No active stories right now.');
         }
-    };
+    }, [USERNAME, after, hasMore]);
 
     // initial load + when tab changes
     useEffect(() => {
@@ -134,8 +133,8 @@ export default function PickAndCast() {
                 setNotice(
                     tab === 'story' ? `Loaded stories for @${USERNAME}.` : `Loaded posts + reels for @${USERNAME}.`
                 );
-            } catch (e: any) {
-                if (alive) setError(e?.message ?? `Unable to load ${tab}`);
+            } catch (e: unknown) {
+                if (alive) setError(e instanceof Error ? e.message : `Unable to load ${tab}`);
             } finally {
                 if (alive) setLoading(false);
             }
@@ -163,7 +162,6 @@ export default function PickAndCast() {
 
     const total = queue.length;
     const currentPost = queue[index];
-    const empty = !loading && (total === 0 || index >= total);
 
     // navigation + swipe
     const advance = () => setIndex((i) => Math.min(i + 1, total));
@@ -230,9 +228,9 @@ export default function PickAndCast() {
     // Choose a reasonable default aspect for each type
     const getAspect = (p?: Post, tab?: 'post' | 'story') => {
         if (!p) return '1 / 1';
-        if (tab === 'story') return '9 / 16';     // stories are vertical
+        if (tab === 'story') return '9 / 16';     // stories are typically vertical
         if (p.code) return '9 / 16';              // reels (code present) -> vertical
-        return '4 / 5';                           // IG post portrait default
+        return '1 / 1';                           // IG posts are usually square
     };
 
 
@@ -362,8 +360,12 @@ export default function PickAndCast() {
 
                                     return (
                                         <div
-                                            className="rounded-2xl overflow-hidden mb-4 bg-[#f0f0f0] relative"
-                                            style={{ aspectRatio: aspect, maxHeight: '70vh' }} // prevent overly tall cards
+                                            className="rounded-2xl overflow-hidden mb-4 bg-[#f0f0f0] relative w-full"
+                                            style={{ 
+                                                aspectRatio: aspect, 
+                                                maxHeight: tab === 'story' ? '60vh' : '50vh',
+                                                minHeight: '200px'
+                                            }}
                                         >
                                             {vidUrl ? (
                                                 <video

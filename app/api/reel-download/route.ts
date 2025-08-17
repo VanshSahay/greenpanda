@@ -1,4 +1,5 @@
 // app/api/reel-download/route.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
 
 const KEY = process.env.RAPIDAPI_KEY!;
