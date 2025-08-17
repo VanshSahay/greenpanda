@@ -77,7 +77,7 @@ export default function Onboarding() {
               <div className="flex items-center gap-3">
                 {/* Small Instagram glyph */}
                 <div className="w-6 h-6 bg-black rounded-md flex items-center justify-center">
-                  <img src="/zorb.svg" alt="Zora" className="w-4 h-4" />
+                  <img src="/Zorb.svg" alt="Zora" className="w-4 h-4" />
                 </div>
 
               </div>
