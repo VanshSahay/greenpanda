@@ -8,7 +8,14 @@ const HOST = 'instagram-scraper-stable-api.p.rapidapi.com';
 const BASE = `https://${HOST}`;
 
 type PostsJSON = {
-  data?: { user?: { edge_owner_to_timeline_media?: { edges?: unknown[]; page_info?: unknown } } };
+  data?: {
+    user?: {
+      edge_owner_to_timeline_media?: {
+        edges?: unknown[];
+        page_info?: unknown;
+      };
+    };
+  };
   [key: string]: unknown;
 };
 
@@ -41,8 +48,25 @@ function extractThumbFromNode(node: any): string | null {
 function extractTakenAt(node: any): number | null {
   // seconds (preferred) or ms → normalize to seconds
   if (typeof node?.taken_at_timestamp === 'number') return node.taken_at_timestamp;
-  if (typeof node?.taken_at === 'number') return node.taken_at > 2e10 ? Math.floor(node.taken_at / 1000) : node.taken_at;
+  if (typeof node?.taken_at === 'number') {
+    return node.taken_at > 2e10 ? Math.floor(node.taken_at / 1000) : node.taken_at;
+  }
   if (typeof node?.caption?.created_at === 'number') return node.caption.created_at;
+  return null;
+}
+
+function extractCaption(node: any): string | null {
+  // 1) Direct object with text (your sample)
+  if (typeof node?.caption?.text === 'string') return node.caption.text;
+
+  // 2) GraphQL-style edges
+  const edgeText = node?.edge_media_to_caption?.edges?.[0]?.node?.text;
+  if (typeof edgeText === 'string') return edgeText;
+
+  // 3) Some IGTV/Reels shapes expose title
+  if (typeof node?.title === 'string') return node.title;
+
+  // 4) Nothing found
   return null;
 }
 
@@ -73,7 +97,11 @@ export async function POST(req: Request) {
 
   const text = await r.text();
   let json: PostsJSON | null = null;
-  try { json = text ? JSON.parse(text) : null; } catch {}
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    // fall through
+  }
 
   if (!r.ok || !json) {
     return NextResponse.json(
@@ -85,18 +113,20 @@ export async function POST(req: Request) {
   // The API usually returns edges under: data.user.edge_owner_to_timeline_media
   const edges =
     json?.data?.user?.edge_owner_to_timeline_media?.edges ??
-    json?.edges ??
-    json?.posts ??
+    (json as any)?.edges ??
+    (json as any)?.posts ??
     [];
 
   const items = (Array.isArray(edges) ? edges : [])
     .map((e: any, i: number) => {
       const n = e?.node ?? e?.media ?? e;
       const thumb = extractThumbFromNode(n);
+
       return {
         id: String(n?.id ?? n?.pk ?? n?.code ?? i),
         code: n?.shortcode ?? n?.code ?? null, // reels/igtv sometimes surface here
         thumbnail: thumb,
+        caption: extractCaption(n),            // <-- ✅ include caption
         stats: {
           likeCount:
             n?.edge_media_preview_like?.count ??
@@ -111,14 +141,13 @@ export async function POST(req: Request) {
         takenAt: extractTakenAt(n),
       };
     })
-    .filter((x: any) => x.thumbnail);
+    .filter((x: any) => x.thumbnail); // keep only items with a thumbnail
 
-  const pageInfo =
-    json?.data?.user?.edge_owner_to_timeline_media?.page_info ?? {};
-  const nextCursor =
-    json?.pagination_token ??
-    (pageInfo as Record<string, unknown>)?.end_cursor ??
-    null;
+  const pageInfo = (json?.data?.user?.edge_owner_to_timeline_media?.page_info ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const nextCursor = (json as any)?.pagination_token ?? pageInfo?.end_cursor ?? null;
 
   return NextResponse.json({
     items,
