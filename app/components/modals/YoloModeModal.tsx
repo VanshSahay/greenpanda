@@ -69,34 +69,6 @@ export default function YoloModeModal() {
             >
               {yoloModeEnabled ? 'YOLO mode enabled' : 'Enable YOLO mode'}
             </button>
-
-            {/* YOLO Mode Additional Info */}
-            <p className="text-[#666] font-outfit text-xs text-center leading-relaxed">
-              YOLO mode stops automatically when your allowance runs out. We&apos;ll notify you.
-            </p>
-          </div>
-        </div>
-
-        {/* Disconnect Neynar Section */}
-        <div className="px-6 mb-8">
-          <div className="bg-[#F8F8F8] rounded-3xl p-6">
-            {/* Disconnect Header */}
-            <h2 className="text-black font-outfit text-lg font-medium mb-4">
-              Disconnect Neynar
-            </h2>
-
-            {/* Disconnect Description */}
-            <p className="text-[#666] font-outfit text-sm leading-relaxed mb-6">
-              If you disconnect, we won&apos;t be able to cast tweets on your behalf.
-            </p>
-
-            {/* Disconnect Button */}
-            <button 
-              onClick={handleDisconnectNeynar}
-              className="w-full py-4 rounded-2xl font-outfit text-base font-medium bg-white border-2 border-[#FF6B6B] text-[#FF6B6B] hover:bg-[#FF6B6B] hover:text-white transition-colors"
-            >
-              Disconnect Neynar
-            </button>
           </div>
         </div>
 

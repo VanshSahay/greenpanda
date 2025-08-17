@@ -1,14 +1,37 @@
+'use client';
+import { useState } from 'react';
 import { useRouter } from "next/navigation";
+import ConnectionModal from '../modals/ConnectionModal';
 
 export default function Onboarding() {
   const router = useRouter();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<{
+    isConnected: boolean;
+    username?: string;
+  }>({ isConnected: false });
+
+  const handleConnect = (username: string, privateKey: string) => {
+    // Store connection info (in a real app, you'd send this to your backend)
+    // For now, we're not using privateKey but it's required for the connection flow
+    console.log('Connecting with username:', username, 'privateKey length:', privateKey.length);
+    
+    setConnectionStatus({
+      isConnected: true,
+      username: username,
+    });
+    
+    // Close modal and navigate to pick and cast page
+    setIsModalOpen(false);
+    router.push("/pickandcast");
+  };
   return (
     <div className="min-h-screen bg-[#e8e9eb] flex justify-center items-center p-4">
       <div className="w-full max-w-sm mx-auto">
         {/* Header */}
         <div className="text-center mb-6">
           <h1 className="text-[#A0A0A0] font-outfit text-lg font-normal">
-            Connect Instagram account
+            Connect
           </h1>
         </div>
 
@@ -67,7 +90,9 @@ export default function Onboarding() {
                     />
                   </svg>
                 </div>
-                <span className="text-[#666] font-outfit text-sm">@vitalik.eth</span>
+                <span className="text-[#666] font-outfit text-sm">
+                  @{connectionStatus.username || 'vitalik.eth'}
+                </span>
               </div>
 
               <div className="flex items-center gap-2">
@@ -75,24 +100,40 @@ export default function Onboarding() {
                 <div className="w-6 h-6 bg-black rounded-md flex items-center justify-center">
                   <img src="/zorb.svg" alt="Zora" className="w-4 h-4" />
                 </div>
-                <span className="text-[#999] font-outfit text-sm">Not connected</span>
+                <span className={`font-outfit text-sm ${connectionStatus.isConnected ? 'text-green-600' : 'text-[#999]'}`}>
+                  {connectionStatus.isConnected ? 'Connected' : 'Not connected'}
+                </span>
               </div>
             </div>
 
             {/* Connect Button */}
             <button
-              onClick={() => router.push("/pickandcast")}
-              className="w-full bg-black text-white font-outfit text-lg font-medium py-4 rounded-2xl mb-4 hover:bg-gray-800 transition-colors"
+              onClick={() => connectionStatus.isConnected ? router.push("/pickandcast") : setIsModalOpen(true)}
+              className={`w-full text-white font-outfit text-lg font-medium py-4 rounded-2xl mb-4 transition-all duration-200 ${
+                connectionStatus.isConnected 
+                  ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-lg' 
+                  : 'bg-black hover:bg-gray-800'
+              }`}
             >
-              Connect Instagram
+              {connectionStatus.isConnected ? 'Go to Pick & Cast' : 'Connect'}
             </button>
 
             {/* Description */}
             <p className="text-[#666] font-outfit text-sm text-center leading-relaxed">
-              To get started, connect your Insta account to Zora. We&apos;ll fetch your posts automatically once it&apos;s linked.
+              {connectionStatus.isConnected 
+                ? `Connected as @${connectionStatus.username}. Ready to cast your posts to Zora!`
+                : "To get started, connect your Insta account to Zora. We'll fetch your posts automatically once it's linked."
+              }
             </p>
           </div>
         </div>
+
+        {/* Connection Modal */}
+        <ConnectionModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onConnect={handleConnect}
+        />
       </div>
     </div>
   );
