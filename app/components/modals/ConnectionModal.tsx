@@ -24,6 +24,7 @@ export default function ConnectionModal({ isOpen, onClose, onConnect }: Connecti
       newErrors.username = 'Username must be at least 3 characters';
     }
     
+    // Private key is required for coin creation
     if (!privateKey.trim()) {
       newErrors.privateKey = 'Private key is required';
     } else if (privateKey.trim().length < 10) {
@@ -41,6 +42,7 @@ export default function ConnectionModal({ isOpen, onClose, onConnect }: Connecti
     try {
       // Simulate connection delay
       await new Promise(resolve => setTimeout(resolve, 1500));
+      // Pass username for Instagram content fetching, private key is optional
       onConnect(username.trim(), privateKey.trim());
     } finally {
       setIsConnecting(false);

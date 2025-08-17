@@ -9,6 +9,7 @@ export default function Onboarding() {
   const [connectionStatus, setConnectionStatus] = useState<{
     isConnected: boolean;
     username?: string;
+    privateKey?: string;
   }>({ isConnected: false });
 
   const handleConnect = (username: string, privateKey: string) => {
@@ -19,11 +20,12 @@ export default function Onboarding() {
     setConnectionStatus({
       isConnected: true,
       username: username,
+      privateKey: privateKey,
     });
 
-    // Close modal and navigate to pick and cast page
+    // Close modal and navigate to pick and cast page with username and private key
     setIsModalOpen(false);
-    router.push("/pickandcast");
+    router.push(`/pickandcast?username=${encodeURIComponent(username)}&privateKey=${encodeURIComponent(privateKey)}`);
   };
   return (
     <div className="min-h-screen bg-[#e8e9eb] flex justify-center items-center p-4">
@@ -76,8 +78,8 @@ export default function Onboarding() {
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 {/* Small Instagram glyph */}
-                <div className="w-6 h-6 bg-black rounded-md flex items-center justify-center">
-                  <img src="/Zorb.svg" alt="Zora" className="w-4 h-4" />
+                <div className="w-8 h-8 bg-black rounded-md flex items-center justify-center">
+                  <img src="/Zorb.svg" alt="Zora" className="w-6 h-6" />
                 </div>
 
               </div>
@@ -97,7 +99,7 @@ export default function Onboarding() {
 
             {/* Connect Button */}
             <button
-              onClick={() => connectionStatus.isConnected ? router.push("/pickandcast") : setIsModalOpen(true)}
+              onClick={() => connectionStatus.isConnected ? router.push(`/pickandcast?username=${encodeURIComponent(connectionStatus.username || '')}&privateKey=${encodeURIComponent(connectionStatus.privateKey || '')}`) : setIsModalOpen(true)}
               className={`w-full text-white font-outfit text-lg font-medium py-4 rounded-2xl mb-4 transition-all duration-200 ${connectionStatus.isConnected
                   ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-lg'
                   : 'bg-black hover:bg-gray-800'

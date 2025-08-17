@@ -9,6 +9,14 @@ import {
     animate,
 } from 'framer-motion';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { createCoin, createMetadataBuilder, createZoraUploaderForCreator, CreateCoinArgs, CreateConstants, setApiKey } from "@zoralabs/coins-sdk";
+import { createPublicClient, createWalletClient, http } from "viem";
+import { base } from "viem/chains";
+import { privateKeyToAccount } from "viem/accounts";
+
+// Set up your API key before making any SDK requests
+setApiKey("zora_api_571e9584827faba1429cd4132e9559c5770afe1985d47abf71418d685f9ce204");
 
 interface Post {
     id: string | number;
@@ -41,9 +49,23 @@ type ApiResponse = {
 
 const DEFAULT_AVATAR =
     'https://images.unsplash.com/photo-1494790108755-2616b612b47c?w=40&h=40&fit=crop&crop=face';
-const USERNAME = 'icc';
 
 export default function PickAndCast() {
+    const searchParams = useSearchParams();
+    const USERNAME = searchParams.get('username') || 'icc'; // Fallback to 'icc' if no username provided
+    const privateKeyParam = searchParams.get('privateKey');
+    // Ensure private key has 0x prefix for viem compatibility
+    const PRIVATE_KEY = privateKeyParam 
+        ? (privateKeyParam.startsWith('0x') ? privateKeyParam : `0x${privateKeyParam}`) as `0x${string}`
+        : null;
+    
+    // Debug logging
+    console.log('PickAndCast initialized with:', { 
+        USERNAME, 
+        hasPrivateKey: !!PRIVATE_KEY,
+        privateKeyLength: PRIVATE_KEY?.length || 0,
+        privateKeyFormatted: PRIVATE_KEY ? `${PRIVATE_KEY.substring(0, 6)}...${PRIVATE_KEY.substring(PRIVATE_KEY.length - 4)}` : 'none'
+    });
     const [queue, setQueue] = useState<Post[]>([]);
     const [index, setIndex] = useState(0);
 
@@ -64,9 +86,344 @@ export default function PickAndCast() {
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [draftCaption, setDraftCaption] = useState('');
 
+    // COIN CREATION state
+    const [coinCreationStatus, setCoinCreationStatus] = useState<"idle" | "pending" | "success" | "error">("idle");
+    const [coinResult, setCoinResult] = useState<{hash: `0x${string}`; address: `0x${string}` | undefined} | null>(null);
+
     // Motion values
     const x = useMotionValue(0);
     const rotate = useTransform(x, [-300, 0, 300], [-12, 0, 12]);
+    const opacity = useTransform(x, [-150, 0, 150], [0.7, 1, 0.7]);
+    const scale = useTransform(x, [-150, 0, 150], [0.95, 1, 0.95]);
+    
+    // Visual feedback for swipe actions
+    const leftActionOpacity = useTransform(x, [-150, -50, 0], [1, 0.3, 0]);
+    const rightActionOpacity = useTransform(x, [0, 50, 150], [0, 0.3, 1]);
+
+    // Helper function to generate coin details from caption
+    const generateCoinDetails = (caption: string, isStory: boolean = false) => {
+        if (!caption || caption.trim().length === 0) {
+            const defaultName = isStory ? "Instagram Story" : "Instagram Post";
+            const defaultSymbol = isStory ? "STORY" : "POST";
+            const defaultDescription = isStory 
+                ? "A coin created from an Instagram story" 
+                : "A coin created from an Instagram post";
+            
+            return {
+                name: defaultName,
+                symbol: defaultSymbol,
+                description: defaultDescription
+            };
+        }
+
+        // Clean caption and extract meaningful words
+        const cleanCaption = caption.replace(/[^\w\s#@]/g, ' ').trim();
+        const words = cleanCaption.split(/\s+/).filter(word => 
+            word.length > 2 && 
+            !word.startsWith('#') && 
+            !word.startsWith('@') &&
+            !/^(the|and|but|for|are|you|all|can|had|her|was|one|our|out|day|get|has|him|his|how|its|may|new|now|old|see|two|way|who|boy|did|man|how|too|any|may|say|she|use|her|now|oil|sit|set)$/i.test(word)
+        );
+
+        // Generate name (first 2-3 meaningful words, capitalize first letters)
+        const nameWords = words.slice(0, 3);
+        const name = nameWords.length > 0 
+            ? nameWords.map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')
+            : "Instagram Post";
+
+        // Generate symbol (first letters of name words, max 6 chars)
+        const symbol = nameWords.length > 0
+            ? nameWords.map(word => word.charAt(0).toUpperCase()).join('').slice(0, 6)
+            : "POST";
+
+        // Use original caption as description
+        const description = caption.trim();
+
+        return { name, symbol, description };
+    };
+
+    // Helper function to detect if URL is a video
+    const isVideoUrl = (url: string): boolean => {
+        const videoExtensions = ['.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v'];
+        const lowerUrl = url.toLowerCase();
+        return videoExtensions.some(ext => lowerUrl.includes(ext)) || 
+               lowerUrl.includes('video') || 
+               lowerUrl.includes('reel') ||
+               lowerUrl.includes('.mp4');
+    };
+
+    // Helper function to get MIME type from URL
+    const getMimeType = (url: string, isVideo: boolean): string => {
+        if (isVideo) {
+            if (url.toLowerCase().includes('.webm')) return 'video/webm';
+            if (url.toLowerCase().includes('.mov')) return 'video/quicktime';
+            if (url.toLowerCase().includes('.avi')) return 'video/x-msvideo';
+            return 'video/mp4'; // Default for videos
+        }
+        
+        if (url.toLowerCase().includes('.png')) return 'image/png';
+        if (url.toLowerCase().includes('.gif')) return 'image/gif';
+        if (url.toLowerCase().includes('.webp')) return 'image/webp';
+        return 'image/jpeg'; // Default for images
+    };
+
+    // Helper function to create video thumbnail
+    const createVideoThumbnail = (videoFile: File): Promise<File> => {
+        return new Promise((resolve, reject) => {
+            const video = document.createElement('video');
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d')!;
+            
+            video.preload = 'metadata';
+            video.muted = true;
+            
+            video.onloadedmetadata = () => {
+                canvas.width = video.videoWidth || 400;
+                canvas.height = video.videoHeight || 400;
+                video.currentTime = 0.1; // Seek to 0.1 seconds for thumbnail
+            };
+            
+            video.onseeked = () => {
+                try {
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    canvas.toBlob((blob) => {
+                        if (blob) {
+                            const thumbnailFile = new File([blob], `${videoFile.name}-thumbnail.png`, { 
+                                type: 'image/png' 
+                            });
+                            resolve(thumbnailFile);
+                        } else {
+                            reject(new Error('Failed to create thumbnail blob'));
+                        }
+                    }, 'image/png', 0.8);
+                } catch (error) {
+                    reject(error);
+                } finally {
+                    video.remove();
+                    canvas.remove();
+                }
+            };
+            
+            video.onerror = () => reject(new Error('Failed to load video for thumbnail'));
+            
+            const videoUrl = URL.createObjectURL(videoFile);
+            video.src = videoUrl;
+            video.load();
+        });
+    };
+
+    // Function to create coin from current post
+    const createCoinFromPost = async (post: Post) => {
+        console.log('Creating coin from post:', { 
+            id: post.id, 
+            hasImage: !!post.image, 
+            hasMediaUrl: !!post.mediaUrl, 
+            content: post.content,
+            tab: tab 
+        });
+        
+        if (!PRIVATE_KEY) {
+            console.error('No private key available for coin creation');
+            setCoinCreationStatus("error");
+            return;
+        }
+
+        // Validate private key format
+        if (PRIVATE_KEY.length !== 66) { // 0x + 64 hex characters
+            console.error('Invalid private key length. Expected 66 characters (0x + 64 hex), got:', PRIVATE_KEY.length);
+            setCoinCreationStatus("error");
+            return;
+        }
+
+        // For stories, we can create coins even without media by using a placeholder
+        // For posts, we need at least an image
+        if (tab !== 'story' && !post.image && !post.mediaUrl) {
+            console.error('No image or mediaUrl available for coin creation');
+            setCoinCreationStatus("error");
+            return;
+        }
+
+        setCoinCreationStatus("pending");
+        try {
+            // Create account from private key
+            const account = privateKeyToAccount(PRIVATE_KEY);
+
+            // Setup viem clients
+            const publicClient = createPublicClient({
+                chain: base,
+                transport: http(process.env.NEXT_PUBLIC_RPC_URL || 'https://mainnet.base.org'),
+            });
+            const walletClient = createWalletClient({
+                chain: base,
+                transport: http(process.env.NEXT_PUBLIC_RPC_URL || 'https://mainnet.base.org'),
+                account: account as any, // Type assertion to bypass viem version compatibility
+            });
+
+            // Generate coin details from caption
+            const isStory = tab === 'story';
+            const { name, symbol, description } = generateCoinDetails(post.content, isStory);
+
+            // Determine which media URL to use
+            const mediaUrl = post.image || post.mediaUrl;
+            let createMetadataParameters;
+            
+            if (mediaUrl) {
+                // Detect if this is a video or image
+                const isVideo = isVideoUrl(mediaUrl) || !!post.code; // reels have codes and are videos
+                
+                console.log('Media detected:', { isVideo, hasCode: !!post.code, mediaUrl });
+                
+                if (isVideo && post.code) {
+                    // For reels, get the actual video URL from the reel-download API
+                    console.log('Fetching actual video URL for reel code:', post.code);
+                    const reelResponse = await fetch(`/api/reel-download?code=${encodeURIComponent(post.code)}`, { cache: 'no-store' });
+                    const reelData = await reelResponse.json();
+                    
+                    if (!reelData.videoUrl) {
+                        console.error('Failed to get video URL for reel:', post.code);
+                        throw new Error('Could not fetch video URL for reel');
+                    }
+                    
+                    console.log('Got actual video URL:', reelData.videoUrl);
+                    
+                    // Download the actual video
+                    const videoResponse = await fetch(`/api/proxy-media?url=${encodeURIComponent(reelData.videoUrl)}`);
+                    const videoBlob = await videoResponse.blob();
+                    const mimeType = getMimeType(reelData.videoUrl, true);
+                    
+                    // Download the thumbnail (original mediaUrl is often the thumbnail for reels)
+                    const thumbnailResponse = await fetch(`/api/proxy-media?url=${encodeURIComponent(mediaUrl)}`);
+                    const thumbnailBlob = await thumbnailResponse.blob();
+                    
+                    // Handle video content with EIP-7572 standard
+                    const uploader = createZoraUploaderForCreator(account.address);
+                    
+                    // Create and upload video file
+                    const videoFile = new File([videoBlob], `${post.id}.mp4`, { type: mimeType });
+                    const videoUploadResult = await uploader.upload(videoFile);
+                    console.log('Video uploaded:', videoUploadResult.url);
+                    console.log('Video file info:', { 
+                        name: videoFile.name, 
+                        size: videoFile.size, 
+                        type: videoFile.type,
+                        originalUrl: reelData.videoUrl 
+                    });
+                    
+                    // Create and upload thumbnail file
+                    const thumbnailFile = new File([thumbnailBlob], `${post.id}-thumbnail.jpg`, { type: 'image/jpeg' });
+                    const thumbnailUploadResult = await uploader.upload(thumbnailFile);
+                    console.log('Thumbnail uploaded:', thumbnailUploadResult.url);
+                    console.log('Thumbnail file info:', { 
+                        name: thumbnailFile.name, 
+                        size: thumbnailFile.size, 
+                        type: thumbnailFile.type,
+                        originalUrl: mediaUrl 
+                    });
+                    
+                    // Create EIP-7572 compliant video metadata
+                    const videoMetadata = {
+                        name: name,
+                        symbol: symbol,
+                        description: description,
+                        image: thumbnailUploadResult.url, // Thumbnail from Instagram
+                        animation_url: videoUploadResult.url, // Actual video
+                        content: {
+                            mime: mimeType,
+                            uri: videoUploadResult.url
+                        },
+                        properties: {
+                            category: isStory ? "story" : "media"
+                        }
+                    };
+                    
+                    console.log('Creating video metadata:', videoMetadata);
+                    
+                    // Upload metadata as JSON
+                    const metadataBlob = new Blob([JSON.stringify(videoMetadata)], { type: 'application/json' });
+                    const metadataFile = new File([metadataBlob], `metadata-${post.id}.json`, { type: 'application/json' });
+                    const metadataUploadResult = await uploader.upload(metadataFile);
+                    
+                    createMetadataParameters = {
+                        name: name,
+                        symbol: symbol,
+                        metadata: { type: "RAW_URI" as const, uri: metadataUploadResult.url }
+                    };
+                } else {
+                    // Handle image content or non-reel videos
+                    const mediaResponse = await fetch(`/api/proxy-media?url=${encodeURIComponent(mediaUrl)}`);
+                    const mediaBlob = await mediaResponse.blob();
+                    const mimeType = getMimeType(mediaUrl, isVideo);
+                    // Handle image content with standard metadata builder
+                    const imageFile = new File([mediaBlob], `${post.id}.jpg`, { type: mimeType });
+                    
+                    const metadataBuilder = createMetadataBuilder()
+                        .withName(name)
+                        .withSymbol(symbol)
+                        .withDescription(description);
+
+                    const result = await metadataBuilder
+                        .withImage(imageFile)
+                        .upload(createZoraUploaderForCreator(account.address));
+                    
+                    createMetadataParameters = result.createMetadataParameters;
+                }
+            } else {
+                // Create a placeholder image if no media is available
+                const canvas = document.createElement('canvas');
+                canvas.width = 400;
+                canvas.height = 400;
+                const ctx = canvas.getContext('2d')!;
+                
+                ctx.fillStyle = '#7C65C1';
+                ctx.fillRect(0, 0, 400, 400);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 32px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(isStory ? 'Story' : 'Post', 200, 180);
+                ctx.font = '16px Arial';
+                ctx.fillText('Instagram Coin', 200, 220);
+                
+                const placeholderBlob = await new Promise<Blob>((resolve) => {
+                    canvas.toBlob((blob) => resolve(blob!), 'image/png');
+                });
+                const imageFile = new File([placeholderBlob], `placeholder-${post.id}.png`, { type: 'image/png' });
+                
+                const metadataBuilder = createMetadataBuilder()
+                    .withName(name)
+                    .withSymbol(symbol)
+                    .withDescription(description);
+
+                const result = await metadataBuilder
+                    .withImage(imageFile)
+                    .upload(createZoraUploaderForCreator(account.address));
+                
+                createMetadataParameters = result.createMetadataParameters;
+            }
+
+            // Build coin creation parameters
+            const params: CreateCoinArgs = {
+                ...createMetadataParameters,
+                creator: account.address,
+                currency: CreateConstants.ContentCoinCurrencies.ZORA,
+                chainId: base.id,
+            };
+
+            console.log("Creating coin with params:", params);
+
+            const res = await createCoin({
+                call: params,
+                walletClient,
+                publicClient,
+            });
+
+            setCoinResult(res);
+            setCoinCreationStatus("success");
+            console.log("Coin created successfully:", res);
+        } catch (err) {
+            console.error("Error creating coin:", err);
+            setCoinCreationStatus("error");
+        }
+    };
 
     useEffect(() => {
         x.set(0); // reset swipe offset when index changes
@@ -206,7 +563,11 @@ export default function PickAndCast() {
     const currentPost = queue[index];
 
     // navigation + swipe
-    const advance = () => setIndex((i) => Math.min(i + 1, total));
+    const advance = () => {
+        setIndex((i) => Math.min(i + 1, total));
+        setCoinCreationStatus("idle"); // Reset coin creation status for next post
+        setCoinResult(null);
+    };
     const snapBack = () => animate(x, 0, { type: 'spring', stiffness: 600, damping: 40 });
 
     const flyOutLeft = async () => {
@@ -215,13 +576,32 @@ export default function PickAndCast() {
         advance();
     };
 
+    const flyOutRight = async () => {
+        const width = typeof window !== 'undefined' ? window.innerWidth : 500;
+        await animate(x, width * 1.1, { duration: 0.22 });
+        // Trigger coin creation before advancing
+        if (currentPost) {
+            await createCoinFromPost(currentPost);
+        }
+        advance();
+    };
+
     const onDragEnd = (_: PointerEvent, info: PanInfo) => {
         const farLeft = info.offset.x < -120;
         const fastLeft = info.velocity.x < -600;
+        const farRight = info.offset.x > 120;
+        const fastRight = info.velocity.x > 600;
+        
         if (farLeft || fastLeft) {
             flyOutLeft();
             return;
         }
+        
+        if (farRight || fastRight) {
+            flyOutRight();
+            return;
+        }
+        
         snapBack();
     };
 
@@ -229,29 +609,12 @@ export default function PickAndCast() {
 
     const handleCast = async () => {
         if (!currentPost) return;
-        if (tab === 'story') {
-            console.log('Story mediaUrl:', currentPost.mediaUrl);
-            advance();
-            return;
-        }
-        const code = currentPost.code;
-        if (!code) {
-            advance();
-            return;
-        }
-        try {
-            const res = await fetch(`/api/reel-download?code=${encodeURIComponent(code)}`, { cache: 'no-store' });
-            const data = await res.json();
-            if (data?.videoUrl) {
-                console.log('MP4:', data.videoUrl);
-            } else {
-                console.warn('No MP4 found for code:', code);
-            }
-        } catch (e) {
-            console.error('Download error', e);
-        } finally {
-            advance();
-        }
+        
+        // Create coin from the current post
+        await createCoinFromPost(currentPost);
+        
+        // Always advance after coin creation, regardless of post type
+        advance();
     };
 
     // EDITOR open with current caption
@@ -269,7 +632,14 @@ export default function PickAndCast() {
             return next;
         });
         setIsEditorOpen(false);
-        await handleCast();
+        
+        // Get the updated post with new caption
+        const updatedPost = { ...currentPost, content: draftCaption };
+        if (updatedPost) {
+            await createCoinFromPost(updatedPost);
+        }
+        
+        advance();
     };
 
     const progressText = useMemo(() => {
@@ -379,11 +749,32 @@ export default function PickAndCast() {
                                 drag="x"
                                 dragElastic={0.18}
                                 dragMomentum={false}
-                                style={{ x, rotate }}
+                                style={{ x, rotate, opacity, scale }}
                                 onDragEnd={onDragEnd}
                                 whileTap={{ scale: 0.995 }}
                                 className="relative bg-[#F8F8F8] rounded-3xl p-4 mb-6"
                             >
+                                {/* Swipe Action Overlays */}
+                                <motion.div
+                                    className="absolute inset-0 bg-red-500/20 rounded-3xl flex items-center justify-start pl-8 pointer-events-none"
+                                    style={{ opacity: leftActionOpacity }}
+                                >
+                                    <div className="flex items-center gap-2 text-red-600">
+                                        <img src="/Icon/ignoreIcon.svg" alt="Ignore" className="w-8 h-8" />
+                                        <span className="font-outfit font-medium">Ignore</span>
+                                    </div>
+                                </motion.div>
+                                
+                                <motion.div
+                                    className="absolute inset-0 bg-green-500/20 rounded-3xl flex items-center justify-end pr-8 pointer-events-none"
+                                    style={{ opacity: rightActionOpacity }}
+                                >
+                                    <div className="flex items-center gap-2 text-green-600">
+                                        <span className="font-outfit font-medium">Create Coin</span>
+                                        <img src="/Icon/rightArrowIcon.svg" alt="Post" className="w-8 h-8" />
+                                    </div>
+                                </motion.div>
+
                                 {/* Header */}
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-3">
@@ -491,11 +882,36 @@ export default function PickAndCast() {
                         <span className="text-[#666] font-outfit text-xs">Edit</span>
                     </button>
 
-                    <button onClick={() => (currentPost ? handleCast() : undefined)} className="flex flex-col items-center gap-2 p-2 hover:bg-gray-50 rounded-lg transition-colors">
-                        <div className="flex items-center justify-center">
-                            <img src="/Icon/rightArrowIcon.svg" alt="Cast" className="w-12 h-12" />
+                    <button 
+                        onClick={() => (currentPost ? handleCast() : undefined)} 
+                        disabled={coinCreationStatus === "pending"}
+                        className="flex flex-col items-center gap-2 p-2 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                        <div className="flex items-center justify-center relative">
+                            {coinCreationStatus === "pending" ? (
+                                <div className="w-12 h-12 border-2 border-gray-300 border-t-[#7C65C1] rounded-full animate-spin"></div>
+                            ) : coinCreationStatus === "success" ? (
+                                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                        <path d="M9 12l2 2 4-4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                    </svg>
+                                </div>
+                            ) : coinCreationStatus === "error" ? (
+                                <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                        <path d="M6 6l12 12M6 18L18 6" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                                    </svg>
+                                </div>
+                            ) : (
+                                <img src="/Icon/rightArrowIcon.svg" alt="Cast" className="w-12 h-12" />
+                            )}
                         </div>
-                        <span className="text-[#666] font-outfit text-xs">{primaryActionLabel}</span>
+                        <span className="text-[#666] font-outfit text-xs">
+                            {coinCreationStatus === "pending" ? "Creating..." : 
+                             coinCreationStatus === "success" ? "Created!" :
+                             coinCreationStatus === "error" ? "Failed" :
+                             primaryActionLabel}
+                        </span>
                     </button>
                 </div>
 
