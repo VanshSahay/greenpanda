@@ -251,6 +251,12 @@ export default function PickAndCast() {
         }
 
         setCoinCreationStatus("pending");
+        
+        // Auto-reset status after 10 seconds to prevent stuck states
+        const statusResetTimeout = setTimeout(() => {
+            setCoinCreationStatus("idle");
+        }, 10000);
+        
         try {
             // Create account from private key
             const account = privateKeyToAccount(PRIVATE_KEY);
@@ -426,9 +432,21 @@ export default function PickAndCast() {
             setCoinResult(res);
             setCoinCreationStatus("success");
             console.log("Coin created successfully:", res);
+            clearTimeout(statusResetTimeout);
+            
+            // Auto-reset success status after 3 seconds
+            setTimeout(() => {
+                setCoinCreationStatus("idle");
+            }, 3000);
         } catch (err) {
             console.error("Error creating coin:", err);
             setCoinCreationStatus("error");
+            clearTimeout(statusResetTimeout);
+            
+            // Auto-reset error status after 5 seconds
+            setTimeout(() => {
+                setCoinCreationStatus("idle");
+            }, 5000);
         }
     };
 
@@ -563,8 +581,8 @@ export default function PickAndCast() {
     // navigation + swipe
     const advance = () => {
         setIndex((i) => Math.min(i + 1, total));
-        setCoinCreationStatus("idle"); // Reset coin creation status for next post
-        setCoinResult(null);
+        // Note: We don't reset coin creation status here anymore since 
+        // coin creation happens in background for previous posts
     };
     const snapBack = () => animate(x, 0, { type: 'spring', stiffness: 600, damping: 40 });
 
@@ -576,12 +594,18 @@ export default function PickAndCast() {
 
     const flyOutRight = async () => {
         const width = typeof window !== 'undefined' ? window.innerWidth : 500;
+        const postToCreateCoin = currentPost; // Capture current post before advancing
+        
+        // Animate card out and advance UI immediately
         await animate(x, width * 1.1, { duration: 0.22 });
-        // Trigger coin creation before advancing
-        if (currentPost) {
-            await createCoinFromPost(currentPost);
-        }
         advance();
+        
+        // Create coin in background without blocking UI
+        if (postToCreateCoin) {
+            createCoinFromPost(postToCreateCoin).catch(error => {
+                console.error('Background coin creation failed:', error);
+            });
+        }
     };
 
     const onDragEnd = (_: PointerEvent, info: PanInfo) => {
@@ -617,11 +641,15 @@ export default function PickAndCast() {
     const handleCast = async () => {
         if (!currentPost) return;
         
-        // Create coin from the current post
-        await createCoinFromPost(currentPost);
+        const postToCreateCoin = currentPost; // Capture current post before advancing
         
-        // Always advance after coin creation, regardless of post type
+        // Advance UI immediately
         advance();
+        
+        // Create coin in background without blocking UI
+        createCoinFromPost(postToCreateCoin).catch(error => {
+            console.error('Background coin creation failed:', error);
+        });
     };
 
     const handleEdit = () => {
@@ -637,20 +665,27 @@ export default function PickAndCast() {
     };
 
     const handleEditorCast = async () => {
+        // Update the current post with edited caption
         setQueue((prev) => {
             const next = [...prev];
             if (next[index]) next[index] = { ...next[index], content: draftCaption };
             return next;
         });
-        setIsEditorOpen(false);
         
         // Get the updated post with new caption
         const updatedPost = { ...currentPost, content: draftCaption };
-        if (updatedPost) {
-            await createCoinFromPost(updatedPost);
-        }
         
+        setIsEditorOpen(false);
+        
+        // Advance UI immediately
         advance();
+        
+        // Create coin in background without blocking UI
+        if (updatedPost) {
+            createCoinFromPost(updatedPost).catch(error => {
+                console.error('Background coin creation failed:', error);
+            });
+        }
     };
 
     const progressText = useMemo(() => {
