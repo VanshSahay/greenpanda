@@ -42,7 +42,7 @@ export default function YoloModeModal() {
 
             {/* YOLO Mode Description */}
             <p className="text-[#666] font-outfit text-sm leading-relaxed mb-6">
-              Automatically cast all new post, reels and stories without approval.
+              Automatically coin all new posts without approval.
             </p>
 
             <img src="/Icon/curvyLineIcon.svg" alt="Edit" className="mb-6" />
