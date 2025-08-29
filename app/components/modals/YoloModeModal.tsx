@@ -49,7 +49,7 @@ export default function YoloModeModal() {
 
             {/* YOLO Mode Description */}
             <p className="text-[#666] font-outfit text-sm leading-relaxed mb-6">
-              Automatically cast all new tweets without approval. You&apos;ll be charged 0.1 USDC per cast.
+              Automatically coin all new posts without approval.
             </p>
 
             <img src="/Icon/curvyLineIcon.svg" alt="Edit" className="mb-6" />
