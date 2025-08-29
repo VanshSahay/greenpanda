@@ -26,7 +26,7 @@ export default function PickAndCastOnboarding() {
       <div className="mx-auto max-w-sm">
         <div
           className="relative bg-white rounded-[24px] overflow-hidden flex flex-col ring-1 ring-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.06)]"
-          style={{ height: 'calc(100svh - 1.25rem + env(safe-area-inset-bottom,0px))' }}
+          style={{ height: 'calc(95svh - 1.25rem + env(safe-area-inset-bottom,0px))' }}
         >
           {/* success overlay */}
           <AnimatePresence>
@@ -125,16 +125,6 @@ export default function PickAndCastOnboarding() {
                 </button>
               </div>
             </div>
-          </div>
-
-          {/* Bottom icon */}
-          <div className="mt-auto py-2 px-10 flex items-center justify-center text-[#0F0F0F]">
-            <button
-              onClick={() => router.push('/settings')}
-              className="w-11 h-11 rounded-full bg-black text-white grid place-items-center hover:bg-black/80"
-            >
-              <SettingsIcon className="w-5 h-5" />
-            </button>
           </div>
         </div>
       </div>
