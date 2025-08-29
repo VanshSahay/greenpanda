@@ -99,7 +99,7 @@ export default function Onboarding() {
               whileTap={{ scale: 0.98 }}
               whileHover={{ y: -1 }}
               transition={{ type: 'spring', stiffness: 500, damping: 34 }}
-              onClick={() => router.push('/connect-instagram')}
+              onClick={() => router.push('/connect-wallet')}
               className="w-full text-white font-outfit text-lg font-medium py-4 rounded-2xl mb-4 transition-all duration-200 bg-black hover:bg-gray-800"
             >
               Continue
