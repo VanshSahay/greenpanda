@@ -3,7 +3,8 @@ import {
   upsertInstagramWalletMapping, 
   getWalletAddressByInstagram, 
   getInstagramByWalletAddress,
-  deleteInstagramWalletMapping 
+  deleteInstagramWalletMapping, 
+  prisma
 } from '@/lib/database';
 
 // POST: Create or update Instagram username to wallet address mapping

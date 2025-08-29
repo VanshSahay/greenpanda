@@ -34,7 +34,7 @@ export default function MappingsPage() {
         setError('Failed to fetch mappings');
       }
     } catch (err) {
-      setError('Network error');
+      setError(`Network error: ${err}`);
     } finally {
       setLoading(false);
     }
@@ -50,7 +50,7 @@ export default function MappingsPage() {
         alert(`Database test failed: ${data.error}`);
       }
     } catch (err) {
-      alert('Failed to test database');
+      alert(`Failed to test database: ${err}`);
     }
   };
 
@@ -97,7 +97,7 @@ export default function MappingsPage() {
               <ul className="text-gray-500 mt-2 space-y-1">
                 <li>• No users have connected their Instagram and wallet yet</li>
                 <li>• The database connection is not working</li>
-                <li>• The mappings table hasn't been created yet</li>
+                <li>• The mappings table hasn&apos;t been created yet</li>
               </ul>
               <div className="mt-4">
                 <button
