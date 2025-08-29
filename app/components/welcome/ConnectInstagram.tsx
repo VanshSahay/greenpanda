@@ -17,7 +17,7 @@ const displayHandle = (() => {
 
   const goNext = () => {
     if (!username.trim()) return;
-    router.push(`/connect-wallet`);
+    router.push(`/connect-wallet?username=${encodeURIComponent(username.trim())}`);
   };
 
   const onSubmit = (e: React.FormEvent) => {

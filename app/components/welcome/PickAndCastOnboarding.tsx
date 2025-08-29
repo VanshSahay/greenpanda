@@ -19,7 +19,14 @@ export default function PickAndCastOnboarding() {
     return () => clearTimeout(t);
   }, [showAllSet]);
 
-  const continueFlow = () => router.push('/pickandcast');
+  const continueFlow = () => {
+    const username = searchParams.get('username');
+    if (username) {
+      router.push(`/pickandcast?username=${encodeURIComponent(username)}`);
+    } else {
+      router.push('/pickandcast');
+    }
+  };
 
   return (
     <div className="min-h-[100svh] bg-[#e8e9eb] p-4">
