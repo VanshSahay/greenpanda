@@ -13,9 +13,6 @@ import {
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { createCoin, createMetadataBuilder, createZoraUploaderForCreator, CreateCoinArgs, CreateConstants, setApiKey } from "@zoralabs/coins-sdk";
-// import { createPublicClient, createWalletClient, http } from "viem";
-// import { base } from "viem/chains";
-// import { privateKeyToAccount } from "viem/accounts";
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi';
 
 // Set up your API key before making any SDK requests
@@ -692,18 +689,6 @@ const advance = useCallback(() => {
                 <p className="text-gray-500 font-outfit text-sm">@{USERNAME}</p>
               </div>
             </div>
-            <button
-              onClick={() => loadPage(null, tab)}
-              className="w-8 h-8 bg-black rounded-lg flex items-center justify-center hover:bg-gray-800 transition-colors"
-              title="Refresh"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1L13.5 2.5L16.17 5.17C15.24 5.06 14.32 5 13.38 5C10.1 5 7.1 5.81 4.77 7.28C2.68 8.61 2 10.88 2 12C2 13.12 2.68 15.39 4.77 16.72C7.1 18.19 10.1 19 13.38 19C14.32 19 15.24 18.94 17.33 18.83L13.5 21.5L15 23L21 17V15H19V9H21ZM17.33 17.97C16.5 18.16 15.56 18.2 14.59 18.2C11.34 18.2 8.67 17.45 6.81 16.36C5.21 15.42 4.8 14.58 4.8 14C4.8 13.42 5.21 12.58 6.81 11.64C8.67 10.55 11.34 9.8 14.59 9.8C15.56 9.8 16.5 9.84 17.33 10.03V17.97Z"
-                  fill="white"
-                />
-              </svg>
-            </button>
           </div>
 
           {/* Tabs */}
