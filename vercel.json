@@ -1,0 +1,9 @@
+{
+  "buildCommand": "npx prisma generate && npm run build",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["iad1"],
+  "env": {
+    "PRISMA_GENERATE_DATAPROXY": "true"
+  }
+}
