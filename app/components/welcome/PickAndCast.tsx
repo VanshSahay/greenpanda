@@ -1066,7 +1066,7 @@ const advance = useCallback(() => {
           </div>
 
           {/* Bottom nav (no translate) */}
-          <div ref={bottomRef} className="flex items-center justify-center py-3">
+          {/* <div ref={bottomRef} className="flex items-center justify-center py-3">
             <Link
               href="/settings"
               className="w-10 h-10 bg-black rounded-full flex items-center justify-center hover:bg-gray-800 transition-colors"
@@ -1081,7 +1081,7 @@ const advance = useCallback(() => {
                 />
               </svg>
             </Link>
-          </div>
+          </div> */}
 
                 {/* EDITOR SHEET */}
                 <AnimatePresence>
