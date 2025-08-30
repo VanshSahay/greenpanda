@@ -264,6 +264,9 @@ const publicClient = usePublicClient(); // auto-uses your Wagmi/RainbowKit confi
             console.log('Media detected:', { isVideo, hasCode: !!post.code, mediaUrl });
       
             if (isVideo && post.code) {
+              // VIDEO CONTENT: Use EIP-7572 standard with animation_url and content
+              console.log('Processing video content with EIP-7572 metadata');
+              
               // Reels: resolve the real video URL
               const reelResponse = await fetch(`/api/reel-download?code=${encodeURIComponent(post.code)}`, { cache: 'no-store' });
               const reelData = await reelResponse.json();
@@ -279,39 +282,117 @@ const publicClient = usePublicClient(); // auto-uses your Wagmi/RainbowKit confi
               // Use connected address for uploads
               const uploader = createZoraUploaderForCreator(address);
       
-              // Upload video
+              // Upload video file
               const videoFile = new File([videoBlob], `${post.id}.mp4`, { type: mimeType });
               const videoUpload = await uploader.upload(videoFile);
+              console.log('Video uploaded:', videoUpload.url);
       
-              // Upload thumbnail
+              // Upload thumbnail image
               const thumbnailFile = new File([thumbnailBlob], `${post.id}-thumbnail.jpg`, { type: 'image/jpeg' });
               const thumbUpload = await uploader.upload(thumbnailFile);
+              console.log('Thumbnail uploaded:', thumbUpload.url);
       
-              // EIP-7572 style metadata (as RAW_URI)
+              // Create EIP-7572 compliant metadata for video content
               const videoMetadata = {
                 name,
                 symbol,
                 description,
-                image: thumbUpload.url,
-                animation_url: videoUpload.url,
-                content: { mime: mimeType, uri: videoUpload.url },
-                properties: { category: isStory ? 'story' : 'media' },
+                image: thumbUpload.url, // Thumbnail as the main image
+                animation_url: videoUpload.url, // Video file as animation_url
+                content: { 
+                  mime: mimeType, 
+                  uri: videoUpload.url 
+                },
+                properties: { 
+                  category: isStory ? 'story' : 'media',
+                  mediaType: 'video',
+                  hasAudio: true
+                },
               };
       
+              console.log('Creating video metadata:', videoMetadata);
+      
+              // Upload metadata JSON file
               const metadataBlob = new Blob([JSON.stringify(videoMetadata)], { type: 'application/json' });
               const metadataFile = new File([metadataBlob], `metadata-${post.id}.json`, { type: 'application/json' });
               const metadataUpload = await uploader.upload(metadataFile);
+              console.log('Metadata uploaded:', metadataUpload.url);
       
               createMetadataParameters = {
                 name,
                 symbol,
                 metadata: { type: 'RAW_URI' as const, uri: metadataUpload.url },
               };
-            } else {
-              // Images / non-reel videos handled by metadata builder
+            } else if (isVideo && !post.code) {
+              // VIDEO CONTENT (non-reel): Use EIP-7572 standard
+              console.log('Processing non-reel video content with EIP-7572 metadata');
+              
               const mediaResponse = await fetch(`/api/proxy-media?url=${encodeURIComponent(mediaUrl)}`);
               const mediaBlob = await mediaResponse.blob();
-              const mimeType = getMimeType(mediaUrl, isVideo);
+              const mimeType = getMimeType(mediaUrl, true);
+              
+              // Use connected address for uploads
+              const uploader = createZoraUploaderForCreator(address);
+              
+              // Upload video file
+              const videoFile = new File([mediaBlob], `${post.id}.mp4`, { type: mimeType });
+              const videoUpload = await uploader.upload(videoFile);
+              console.log('Video uploaded:', videoUpload.url);
+              
+              // Create a placeholder thumbnail for video
+              const canvas = document.createElement('canvas');
+              canvas.width = 400; canvas.height = 400;
+              const ctx = canvas.getContext('2d')!;
+              ctx.fillStyle = '#7C65C1'; ctx.fillRect(0, 0, 400, 400);
+              ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center';
+              ctx.font = 'bold 24px Arial'; ctx.fillText('Video Content', 200, 180);
+              ctx.font = '16px Arial'; ctx.fillText('Instagram Coin', 200, 220);
+              
+              const placeholderBlob: Blob = await new Promise((resolve) => {
+                canvas.toBlob((b) => resolve(b!), 'image/png');
+              });
+              const thumbnailFile = new File([placeholderBlob], `video-thumbnail-${post.id}.png`, { type: 'image/png' });
+              const thumbUpload = await uploader.upload(thumbnailFile);
+              console.log('Video thumbnail uploaded:', thumbUpload.url);
+              
+              // Create EIP-7572 compliant metadata for video content
+              const videoMetadata = {
+                name,
+                symbol,
+                description,
+                image: thumbUpload.url, // Placeholder thumbnail as main image
+                animation_url: videoUpload.url, // Video file as animation_url
+                content: { 
+                  mime: mimeType, 
+                  uri: videoUpload.url 
+                },
+                properties: { 
+                  category: isStory ? 'story' : 'media',
+                  mediaType: 'video',
+                  hasAudio: true
+                },
+              };
+              
+              console.log('Creating video metadata:', videoMetadata);
+              
+              // Upload metadata JSON file
+              const metadataBlob = new Blob([JSON.stringify(videoMetadata)], { type: 'application/json' });
+              const metadataFile = new File([metadataBlob], `metadata-${post.id}.json`, { type: 'application/json' });
+              const metadataUpload = await uploader.upload(metadataFile);
+              console.log('Metadata uploaded:', metadataUpload.url);
+              
+              createMetadataParameters = {
+                name,
+                symbol,
+                metadata: { type: 'RAW_URI' as const, uri: metadataUpload.url },
+              };
+            } else {
+              // IMAGE CONTENT: Use standard metadata builder
+              console.log('Processing image content with standard metadata builder');
+              
+              const mediaResponse = await fetch(`/api/proxy-media?url=${encodeURIComponent(mediaUrl)}`);
+              const mediaBlob = await mediaResponse.blob();
+              const mimeType = getMimeType(mediaUrl, false);
               const imageFile = new File([mediaBlob], `${post.id}.jpg`, { type: mimeType });
       
               const metadataBuilder = createMetadataBuilder()
@@ -324,9 +405,12 @@ const publicClient = usePublicClient(); // auto-uses your Wagmi/RainbowKit confi
                 .upload(createZoraUploaderForCreator(address));
       
               createMetadataParameters = result.createMetadataParameters;
+              console.log('Image metadata created:', createMetadataParameters);
             }
           } else {
-            // Placeholder (no media)
+            // No media available: Create placeholder image
+            console.log('No media available, creating placeholder image');
+            
             const canvas = document.createElement('canvas');
             canvas.width = 400; canvas.height = 400;
             const ctx = canvas.getContext('2d')!;
@@ -350,6 +434,7 @@ const publicClient = usePublicClient(); // auto-uses your Wagmi/RainbowKit confi
               .upload(createZoraUploaderForCreator(address));
       
             createMetadataParameters = result.createMetadataParameters;
+            console.log('Placeholder metadata created:', createMetadataParameters);
           }
       
           // Build coin params using connected wallet
@@ -528,10 +613,18 @@ const advance = useCallback(() => {
   
   const flyOutRight = async () => {
     const width = typeof window !== 'undefined' ? window.innerWidth : 500;
+    const postToCreateCoin = currentPost; // Capture current post before advancing
+    
+    // Animate card out and advance UI immediately
     await animate(x, width * 1.1, { duration: 0.22 });
-    if (currentPost) await createCoinFromPost(currentPost);
-    x.set(0);                       // <- important
     advance();
+    
+    // Create coin in background without blocking UI
+    if (postToCreateCoin) {
+      createCoinFromPost(postToCreateCoin).catch(error => {
+        console.error('Background coin creation failed:', error);
+      });
+    }
   };
   
     const onDragEnd = (_: PointerEvent, info: PanInfo) => {
@@ -572,11 +665,6 @@ const advance = useCallback(() => {
 
         // Always advance after coin creation, regardless of post type
         advance();
-        
-        // Create coin in background without blocking UI
-        createCoinFromPost(postToCreateCoin).catch(error => {
-            console.error('Background coin creation failed:', error);
-        });
     };
 
     const handleEdit = () => {
@@ -607,13 +695,6 @@ const advance = useCallback(() => {
         }
 
         advance();
-        
-        // Create coin in background without blocking UI
-        if (updatedPost) {
-            createCoinFromPost(updatedPost).catch(error => {
-                console.error('Background coin creation failed:', error);
-            });
-        }
     };
 
     const progressText = useMemo(() => {
