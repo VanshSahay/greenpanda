@@ -39,9 +39,9 @@ export default function Onboarding() {
               style={{ willChange: 'transform' }}
               className="flex items-center gap-3"
             >
-              <div className="flex-1 flex items-center bg-[#F3F3F4] rounded-3xl px-4 py-6 min-h-[80px]">
+              <div className="flex-1 flex items-center justify-center bg-[#F3F3F4] rounded-3xl px-4 py-6 min-h-[80px]">
                 <span className="text-[#494656] font-outfit text-base font-normal leading-[130%] tracking-[-0.16px]">
-                  Insta Posts to Zora
+                  Instagram Posts to Zora
                 </span>
               </div>
               <motion.div
@@ -70,7 +70,7 @@ export default function Onboarding() {
                 
               </motion.div>
 
-              <div className="flex-1 flex items-center bg-[#F3F3F4] rounded-3xl px-4 py-6 min-h-[80px]">
+              <div className="flex-1 flex items-center justify-center bg-[#F3F3F4] rounded-3xl px-4 py-6 min-h-[80px]">
                 <span className="text-[#494656] font-outfit text-base font-normal leading-[130%] tracking-[-0.16px]">
                   Make edits in the app itself
                 </span>
