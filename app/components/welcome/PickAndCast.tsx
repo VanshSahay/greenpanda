@@ -10,7 +10,6 @@ import {
     useTransform,
     animate,
 } from 'framer-motion';
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { createCoin, createMetadataBuilder, createZoraUploaderForCreator, CreateCoinArgs, CreateConstants, setApiKey } from "@zoralabs/coins-sdk";
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi';
